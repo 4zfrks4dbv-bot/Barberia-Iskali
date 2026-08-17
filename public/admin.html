@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de citas — Iskali Barbería</title>
+<link rel="icon" type="image/png" href="img/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="admin-header">
+  <div class="left">
+    <img src="img/logo.png" alt="Iskali Barbería">
+    <span id="roleBadge" class="role-badge"></span>
+  </div>
+  <button id="logoutBtn" class="btn-ghost">Cerrar sesión</button>
+</div>
+
+<nav class="nav-tabs">
+  <a href="admin.html" class="active">Citas</a>
+  <a href="clientes.html" id="clientesTab">Clientes</a>
+</nav>
+
+<main>
+  <section class="card">
+    <div class="search-box">
+      <label for="searchInput">Buscar por nombre o teléfono</label>
+      <input type="text" id="searchInput" placeholder="Ej. Juan, o 241...">
+    </div>
+
+    <div class="view-toggle">
+      <button id="listViewBtn">Lista</button>
+      <button id="calendarViewBtn" class="inactive">Calendario</button>
+    </div>
+
+    <div id="calendarWrap" hidden>
+      <div class="calendar-nav">
+        <button class="btn-secondary" id="prevMonthBtn" style="width:auto;">‹</button>
+        <span id="calendarLabel"></span>
+        <button class="btn-secondary" id="nextMonthBtn" style="width:auto;">›</button>
+      </div>
+      <div class="calendar-grid" id="calendarGrid"></div>
+    </div>
+  </section>
+
+  <section class="card" id="blockedSection" hidden>
+    <h2>Días bloqueados</h2>
+    <label for="blockDateInput">Bloquear una fecha (vacaciones, imprevistos)</label>
+    <input type="date" id="blockDateInput">
+    <button id="addBlockBtn" class="btn-secondary">Bloquear ese día</button>
+    <div class="blocked-list" id="blockedList"></div>
+  </section>
+
+  <div id="appointmentsList"></div>
+</main>
+
+<script src="auth.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

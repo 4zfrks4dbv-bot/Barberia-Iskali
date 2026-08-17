@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Iskali Barbería — Reserva tu cita</title>
+<link rel="icon" type="image/png" href="img/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="hero">
+  <img src="img/logo.png" alt="Iskali Barbería" class="hero-logo">
+  <h1 class="sr-only">Iskali Barbería</h1>
+  <p class="tagline">Más que un corte de cabello, una experiencia diseñada para resaltar tu estilo.</p>
+  <div class="info-strip">
+    <a id="mapsLink" href="#" target="_blank" rel="noopener">📍 Cómo llegar</a>
+    <span id="todayHours">—</span>
+    <a id="waLink" href="#" target="_blank" rel="noopener">WhatsApp</a>
+  </div>
+</header>
+
+<main>
+  <section class="card" id="servicesSection">
+    <h2>1. Elige tu servicio</h2>
+    <div id="services" class="service-grid"></div>
+  </section>
+
+  <section class="card" id="metodoIskaliSection" hidden>
+    <h2>1. Elige tu experiencia <span class="iskali-badge">Método Iskali · Jueves</span></h2>
+    <p class="iskali-intro">Un sistema de experiencias premium diseñado para acompañarte en cada etapa de tu imagen y bienestar.</p>
+
+    <p class="iskali-base-label">Todas las sesiones incluyen</p>
+    <ul id="iskaliBaseList" class="iskali-base-list"></ul>
+
+    <p class="step-label">Elige tu sesión</p>
+    <div id="iskaliSessions" class="session-grid"></div>
+
+    <p class="step-label">Adicionales opcionales (costo aparte)</p>
+    <div id="iskaliAddons" class="addon-grid"></div>
+
+    <p class="price-note">El precio de cada sesión y adicional se confirma directamente con Luisillo.</p>
+  </section>
+
+  <section class="card">
+    <h2>2. Elige fecha y hora</h2>
+    <label for="dateInput">Fecha</label>
+    <input type="date" id="dateInput">
+    <p id="thursdayNote" class="note" hidden>Los jueves solo hay 6 sesiones de 90 minutos disponibles, la experiencia completa con Luisillo.</p>
+    <div id="slots" class="slot-grid"></div>
+  </section>
+
+  <section class="card" id="contactSection" hidden>
+    <h2>3. Tus datos</h2>
+    <p id="selectionSummary" class="selection-summary"></p>
+    <label for="nameInput">Nombre</label>
+    <input type="text" id="nameInput" placeholder="Tu nombre">
+    <label for="phoneInput">Teléfono</label>
+    <input type="tel" id="phoneInput" placeholder="10 dígitos">
+
+    <button id="submitBtn">Reservar mi cita</button>
+    <p id="errorMsg" class="error" hidden></p>
+  </section>
+
+  <section class="card" id="confirmSection" hidden>
+    <h2>¡Cita reservada!</h2>
+    <p id="afterMsg"></p>
+    <a id="confirmWaBtn" class="btn-primary" href="#" target="_blank" rel="noopener">Confirmar por WhatsApp</a>
+  </section>
+</main>
+
+<footer>
+  <p id="privacyNotice" class="small muted"></p>
+  <div class="social-links">
+    <a href="https://www.instagram.com/iskali_barberia/" target="_blank" rel="noopener">Instagram</a>
+    <a href="https://www.facebook.com/profile.php?id=61576221611592" target="_blank" rel="noopener">Facebook</a>
+    <a href="https://www.tiktok.com/@barberluisesponda" target="_blank" rel="noopener">TikTok</a>
+  </div>
+</footer>
+
+<script src="booking.js"></script>
+</body>
+</html>

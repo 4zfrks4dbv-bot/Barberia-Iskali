@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clientes — Iskali Barbería</title>
+<link rel="icon" type="image/png" href="img/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="admin-header">
+  <div class="left">
+    <img src="img/logo.png" alt="Iskali Barbería">
+    <span id="roleBadge" class="role-badge"></span>
+  </div>
+  <button id="logoutBtn" class="btn-ghost">Cerrar sesión</button>
+</div>
+
+<nav class="nav-tabs">
+  <a href="admin.html">Citas</a>
+  <a href="clientes.html" class="active">Clientes</a>
+</nav>
+
+<main>
+  <section class="card">
+    <h2>Resumen del negocio</h2>
+    <div class="stat-grid" id="statsGrid"></div>
+  </section>
+
+  <section class="card">
+    <h2>Clientes más frecuentes</h2>
+    <label for="clientSearch">Buscar cliente</label>
+    <input type="text" id="clientSearch" placeholder="Nombre o teléfono">
+    <div id="clientsList" style="margin-top:14px;"></div>
+  </section>
+
+  <section class="card" id="historySection" hidden>
+    <h2 id="historyTitle">Historial</h2>
+    <div id="historyList"></div>
+    <button class="btn-secondary" id="closeHistoryBtn">Cerrar historial</button>
+  </section>
+</main>
+
+<script src="auth.js"></script>
+<script src="clientes.js"></script>
+</body>
+</html>
