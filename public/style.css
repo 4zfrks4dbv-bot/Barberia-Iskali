@@ -39,13 +39,15 @@ main { max-width: 640px; margin: 0 auto; padding: 24px 20px 60px; display: flex;
 
 .service-grid { display: grid; gap: 12px; }
 .service-card {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
   background: var(--ink-soft-2); border: 1px solid transparent; border-radius: 10px;
   padding: 14px 16px; color: var(--bone); cursor: pointer; font-family: inherit; font-size: 1rem; text-align: left;
 }
 .service-card:hover, .service-card:focus-visible { border-color: var(--yellow); outline: none; }
 .service-card.selected { border-color: var(--yellow); background: rgba(255, 222, 0, 0.12); }
-.service-meta { color: var(--bone-dim); font-size: .85rem; }
+.service-main { display: flex; flex-direction: column; gap: 3px; }
+.service-tagline { color: var(--bone-dim); font-size: .82rem; }
+.service-meta { color: var(--bone-dim); font-size: .85rem; white-space: nowrap; }
 
 label { display: block; margin: 14px 0 6px; font-size: .9rem; color: var(--bone-dim); }
 input[type=text], input[type=tel], input[type=date], input[type=password], select {

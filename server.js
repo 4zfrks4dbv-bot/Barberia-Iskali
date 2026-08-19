@@ -60,7 +60,7 @@ function generateSlots(dateStr, serviceId) {
 
   const dayAppts = getDayAppointments(db, dateStr);
   const now = new Date();
-  const minAdvanceMs = config.booking.minAdvanceHours * 3600000;
+  const minAdvanceMs = config.booking.minAdvanceMinutes * 60000;
   const maxAdvanceMs = config.booking.maxAdvanceDays * 86400000;
 
   const target = new Date(dateStr + "T00:00:00");
@@ -106,6 +106,13 @@ function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+// Suma el recargo fijo de agendado (config.booking.reservationFee) a un precio
+// base, siempre y cuando ese precio base ya esté confirmado (no sea null).
+function addReservationFee(basePrice) {
+  if (basePrice == null) return null;
+  return basePrice + config.booking.reservationFee;
+}
+
 // ---------- Método Iskali (jueves): arma la sesión + adicionales de una cita ----------
 // Se usa tanto al crear la cita como al editarla desde el panel, para que el
 // nombre mostrado y la duración salgan siempre igual sin duplicar lógica.
@@ -127,14 +134,15 @@ function resolveMetodoIskali(serviceId, addonIds) {
   // Si algún precio (sesión o adicional) todavía es null, el total queda en
   // null en vez de un número incompleto/engañoso.
   const prices = [session.price, ...validAddons.map((a) => a.price)];
-  const price = prices.every((p) => p != null) ? prices.reduce((sum, p) => sum + p, 0) : null;
+  const basePrice = prices.every((p) => p != null) ? prices.reduce((sum, p) => sum + p, 0) : null;
 
   return {
     serviceId: session.id,
     serviceName,
     duration: config.thursdayRules.sessionDuration,
     addons: validAddons.map((a) => a.id),
-    price,
+    basePrice,
+    price: addReservationFee(basePrice),
   };
 }
 
@@ -206,7 +214,7 @@ app.post("/api/appointments", (req, res) => {
   }
 
   const weekday = getWeekday(date);
-  let finalServiceId, serviceName, duration, finalAddons, price;
+  let finalServiceId, serviceName, duration, finalAddons, basePrice, price;
 
   if (weekday === 4) {
     const resolved = resolveMetodoIskali(serviceId, addons);
@@ -215,6 +223,7 @@ app.post("/api/appointments", (req, res) => {
     serviceName = resolved.serviceName;
     duration = resolved.duration;
     finalAddons = resolved.addons;
+    basePrice = resolved.basePrice;
     price = resolved.price;
   } else {
     const svc = config.services.find((s) => s.id === serviceId);
@@ -223,7 +232,8 @@ app.post("/api/appointments", (req, res) => {
     serviceName = svc.name;
     duration = svc.duration;
     finalAddons = [];
-    price = svc.price;
+    basePrice = svc.price;
+    price = addReservationFee(basePrice);
   }
 
   const availableTimes = generateSlots(date, finalServiceId).map((s) => s.time);
@@ -243,7 +253,9 @@ app.post("/api/appointments", (req, res) => {
     serviceId: finalServiceId,
     serviceName,
     addons: finalAddons, // [] en días normales; ids de adicionales los jueves
-    price, // null si algún precio involucrado aún no está confirmado
+    basePrice, // precio del servicio sin el recargo de agendado
+    reservationFee: config.booking.reservationFee,
+    price, // total: basePrice + reservationFee (null si algún precio aún no está confirmado)
     status: "pendiente_confirmar",
     createdAt: new Date().toISOString(),
   };
@@ -252,9 +264,10 @@ app.post("/api/appointments", (req, res) => {
 
   // Mensaje de WhatsApp con los datos reales de la cita, para que el barbero
   // confirme viendo quién es, qué pidió y cuándo.
+  const priceText = price != null ? ` Total: $${price} (incluye $${config.booking.reservationFee} de recargo por agendar).` : "";
   const waText =
     `Hola, soy ${name}. Quiero confirmar mi cita en Iskali Barbería: ` +
-    `${serviceName}, el ${date} a las ${time}.`;
+    `${serviceName}, el ${date} a las ${time}.${priceText}`;
   const whatsappLink = `https://wa.me/${config.business.whatsapp}?text=${encodeURIComponent(waText)}`;
 
   res.json({
@@ -287,7 +300,7 @@ app.put("/api/admin/appointments/:id", requireAuth, requireAdmin, (req, res) => 
 
   if (req.body.date || req.body.time || req.body.serviceId || req.body.addons) {
     const weekday = getWeekday(updated.date);
-    let duration, serviceName, serviceId, finalAddons, price;
+    let duration, serviceName, serviceId, finalAddons, basePrice, price;
 
     if (weekday === 4) {
       const wantedServiceId = req.body.serviceId || current.serviceId;
@@ -298,6 +311,7 @@ app.put("/api/admin/appointments/:id", requireAuth, requireAdmin, (req, res) => 
       serviceName = resolved.serviceName;
       duration = resolved.duration;
       finalAddons = resolved.addons;
+      basePrice = resolved.basePrice;
       price = resolved.price;
     } else {
       const svc =
@@ -308,7 +322,8 @@ app.put("/api/admin/appointments/:id", requireAuth, requireAdmin, (req, res) => 
       serviceName = svc.name;
       duration = svc.duration;
       finalAddons = [];
-      price = svc.price;
+      basePrice = svc.price;
+      price = addReservationFee(basePrice);
     }
 
     const dayAppts = getDayAppointments(db, updated.date).filter((a) => a.id !== current.id);
@@ -321,6 +336,8 @@ app.put("/api/admin/appointments/:id", requireAuth, requireAdmin, (req, res) => 
     updated.serviceName = serviceName;
     updated.duration = duration;
     updated.addons = finalAddons;
+    updated.basePrice = basePrice;
+    updated.reservationFee = config.booking.reservationFee;
     updated.price = price;
     updated.startMinutes = timeToMinutes(updated.time);
   }

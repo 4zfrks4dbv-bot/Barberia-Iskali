@@ -1,3 +1,12 @@
+// Convierte "HH:MM" (24h, como se guarda internamente) a "h:MM AM/PM" para mostrar.
+function to12Hour(t) {
+  const [h, m] = t.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  let hour12 = h % 12;
+  if (hour12 === 0) hour12 = 12;
+  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
 // ---------- Página de login ----------
 const loginBtn = document.getElementById("loginBtn");
 if (loginBtn) {
@@ -123,11 +132,17 @@ if (listEl) {
     card.className = "appt-card";
     const statusLabels = { pendiente_confirmar: "Pendiente de confirmar", confirmada: "Confirmada", cancelada: "Cancelada" };
 
+    let priceText = "";
+    if (a.price != null) {
+      priceText = ` · $${a.price}`;
+      if (a.reservationFee) priceText += ` (incluye $${a.reservationFee} de agendado)`;
+    }
+
     card.innerHTML = `
       <div class="appt-top">
         <div>
-          <strong>${a.date} · ${a.time}</strong><br>
-          <span class="note">${a.serviceName} (${a.duration} min)${a.price != null ? ` · $${a.price}` : ""}</span>
+          <strong>${a.date} · ${to12Hour(a.time)}</strong><br>
+          <span class="note">${a.serviceName} (${a.duration} min)${priceText}</span>
         </div>
         ${isAdmin ? `
           <select data-id="${a.id}" class="statusSelect" style="width:auto;">
@@ -191,7 +206,7 @@ if (listEl) {
     form.innerHTML = `
       <label>Fecha</label>
       <input type="date" class="editDate" value="${a.date}">
-      <label>Hora (HH:MM)</label>
+      <label>Hora (HH:MM, formato 24h)</label>
       <input type="text" class="editTime" value="${a.time}">
       ${iskaliFieldsHtml}
       <label>Nombre</label>

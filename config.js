@@ -35,8 +35,13 @@ module.exports = {
     6: { open: "10:00", close: "19:30" }, // sábado
   },
 
-  // Cuántas citas pueden traslaparse al mismo tiempo en días normales (2 barberos)
-  capacityRegularDays: 2,
+  // Cuántas citas pueden traslaparse al mismo tiempo en días normales.
+  // NOTA (18/08/26): Luisillo reportó que el mismo horario se pudo agendar
+  // dos veces. Con capacidad 2 eso es esperado (representa 2 barberos), pero
+  // si en días normales solo trabaja Luisillo, esto debe quedar en 1. Lo dejo
+  // en 1 por ahora — si en realidad hay un segundo barbero atendiendo cortes
+  // normales, súbelo de nuevo a 2 en este archivo.
+  capacityRegularDays: 1,
 
   // Jueves — "Método Iskali": solo Luisillo, sesiones largas, cupo limitado
   thursdayRules: {
@@ -48,13 +53,52 @@ module.exports = {
     lunchBreak: { start: "15:00", end: "16:00" }, // comida, ajustable
   },
 
-  // Servicios de días normales (lun-mié, vie-dom) — confirmados por el cliente,
-  // precios confirmados por Luis el 16/08/26.
+  // Servicios de días normales (lun-mié, vie-dom).
+  // Actualizado el 18/08/26 según mensaje de WhatsApp de Luisillo: reemplaza
+  // por completo la lista anterior (nombres, iconos, taglines y precios).
+  // "icon" es el emoji que aparece junto al título del servicio en la página.
+  // "tagline" es la frase corta que va debajo del nombre.
   services: [
-    { id: "corte", name: "Corte de cabello", duration: 60, price: 140 },
-    { id: "corte_ceja", name: "Corte de cabello y ceja", duration: 60, price: 170 },
-    { id: "corte_barba", name: "Corte de cabello y barba", duration: 60, price: 200 },
-    { id: "corte_ceja_barba", name: "Corte de cabello, ceja y barba", duration: 75, price: 230 },
+    {
+      id: "corte",
+      name: "Corte de cabello",
+      icon: "✂️",
+      tagline: "Estilo pensado para ti.",
+      duration: 45,
+      price: 120,
+    },
+    {
+      id: "corte_ceja",
+      name: "Corte de cabello + Arreglo de ceja",
+      icon: "👁️",
+      tagline: "Mayor definición facial.",
+      duration: 60,
+      price: 150,
+    },
+    {
+      id: "barba",
+      name: "Arreglo de barba",
+      icon: "🧔",
+      tagline: "Perfilado perfecto para ti.",
+      duration: 45,
+      price: 100,
+    },
+    {
+      id: "corte_barba",
+      name: "Corte de cabello + Arreglo de Barba",
+      icon: "💈",
+      tagline: "Imagen limpia y renovada.",
+      duration: 75,
+      price: 180,
+    },
+    {
+      id: "corte_barba_ceja",
+      name: "Corte de cabello + Arreglo de Barba + Arreglo de ceja",
+      icon: "👑",
+      tagline: "El cuidado completo de tu imagen.",
+      duration: 90,
+      price: 230,
+    },
   ],
 
   // Método Iskali — el servicio premium exclusivo de los jueves.
@@ -68,7 +112,6 @@ module.exports = {
   // Luis los confirme, solo hay que rellenar esos números aquí abajo — no hace
   // falta tocar server.js ni los archivos de public/.
   metodoIskali: {
-    // Esto se incluye en las 4 sesiones, sin excepción.
     baseIncludes: [
       "Recepción personalizada",
       "Bebida de cortesía",
@@ -85,7 +128,7 @@ module.exports = {
         name: "Descubre",
         emoji: "🧭",
         tagline: "La sesión base, enfocada en conocer al cliente y descubrir qué estilo le favorece.",
-        extras: [], // no suma nada más allá de baseIncludes
+        extras: [],
         price: null, // PENDIENTE
       },
       {
@@ -114,7 +157,6 @@ module.exports = {
       },
     ],
 
-    // Se pueden agregar a cualquiera de las 4 sesiones de arriba, con costo aparte.
     addons: [
       { id: "perfilado_ceja", name: "Perfilado de ceja", price: null }, // PENDIENTE
       { id: "perfilado_barba", name: "Perfilado de barba", price: null }, // PENDIENTE
@@ -123,13 +165,16 @@ module.exports = {
   },
 
   booking: {
-    minAdvanceHours: 2,
+    // Antes eran 2 horas; Luisillo pidió bajarlo a 30 minutos.
+    minAdvanceMinutes: 30,
     maxAdvanceDays: 30,
     cancelationHours: 8,
+    // Recargo fijo que se cobra SIEMPRE al agendar (días normales y jueves),
+    // pero que NO se muestra en el precio del servicio — se suma al confirmar
+    // la cita, para que el precio del servicio se vea más bajo.
+    reservationFee: 20,
   },
 
-  // El mensaje de WhatsApp con los datos de la cita se arma dinámicamente en
-  // server.js (nombre, servicio, fecha y hora), aquí solo van los textos fijos.
   messages: {
     afterBooking:
       "¡Tu cita quedó registrada! Confírmala por WhatsApp con Iskali Barbería para que quede lista.",
