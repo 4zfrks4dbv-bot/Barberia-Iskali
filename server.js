@@ -265,7 +265,7 @@ app.post("/api/appointments", (req, res) => {
   db.appointments.push(appt);
   writeDB(db);
 
-  const priceText = price != null ? ` Total: $${price} (incluye $${config.booking.reservationFee} de recargo por agendar).` : "";
+  const priceText = price != null ? ` Total: $${price} (incluye $${config.booking.reservationFee} de cuota por agendar).` : "";
   const waText =
     `Hola, soy ${name}. Quiero confirmar mi cita en Iskali Barbería: ` +
     `${serviceName}, el ${date} a las ${time}.${priceText}`;
