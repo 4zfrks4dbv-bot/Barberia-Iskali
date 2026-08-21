@@ -34,12 +34,12 @@ if (listEl) {
     calendarMonth: new Date(),
     dayFilter: null,
     searchTerm: "",
-    businessConfig: null, // trae metodoIskali (sesiones/adicionales) para el formulario de edición
+    businessConfig: null,
     metodoIskaliActivo: true,
   };
 
   if (guardPage(false)) {
-    loadBusinessConfig(); // todos los roles la necesitan para saber si mostrar campos de Método Iskali al editar
+    loadBusinessConfig();
 
     if (getRole() === "admin") {
       document.getElementById("blockedSection").hidden = false;
@@ -60,10 +60,6 @@ if (listEl) {
 
     loadAppointments();
 
-    // Actualiza la lista sola cada 15 segundos, sin que tengas que recargar
-    // la página — respeta el buscador y el filtro de día que ya tengas puestos.
-    // Si hay un formulario de edición abierto, se salta ese ciclo para no
-    // interrumpirte a media edición.
     setInterval(() => {
       const openEditForms = document.querySelectorAll(".edit-form:not([hidden])");
       if (openEditForms.length > 0) return;
@@ -179,11 +175,15 @@ if (listEl) {
     card.className = "appt-card";
     const statusLabels = { pendiente_confirmar: "Pendiente de confirmar", confirmada: "Confirmada", cancelada: "Cancelada" };
 
+    const priceLine = a.price != null
+      ? (a.reservationFee ? ` · $${a.basePrice} + $${a.reservationFee} = $${a.price}` : ` · $${a.price}`)
+      : "";
+
     card.innerHTML = `
       <div class="appt-top">
         <div>
           <strong>${a.date} · ${a.time}</strong><br>
-          <span class="note">${a.serviceName} (${a.duration} min)${a.price != null ? ` · $${a.price}` : ""}</span>
+          <span class="note">${a.serviceName} (${a.duration} min)${priceLine}</span>
         </div>
         ${isAdmin ? `
           <select data-id="${a.id}" class="statusSelect" style="width:auto;">
@@ -219,10 +219,6 @@ if (listEl) {
     if (!form.hidden) { form.hidden = true; return; }
     form.hidden = false;
 
-    // Los campos de sesión/adicionales del Método Iskali solo aparecen si la
-    // cita es de jueves Y el Método Iskali está activo ahora mismo. Si Luis
-    // lo desactivó después de que se agendó esta cita, se edita como cita
-    // normal (fecha, hora, nombre, teléfono).
     const isThursday = new Date(a.date + "T00:00:00").getDay() === 4;
     const mi = state.businessConfig && state.businessConfig.metodoIskali;
     const mostrarCamposIskali = isThursday && state.metodoIskaliActivo && mi;

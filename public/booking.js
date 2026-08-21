@@ -7,6 +7,25 @@ const state = {
   selectedTime: null,
 };
 
+// Convierte "HH:MM" (24h, como se guarda internamente) a "h:MM AM/PM" para mostrar.
+function to12Hour(t) {
+  const [h, m] = t.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  let hour12 = h % 12;
+  if (hour12 === 0) hour12 = 12;
+  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+function isThursday(dateStr) {
+  return new Date(dateStr + "T00:00:00").getDay() === 4;
+}
+
+// true solo si es jueves Y el Método Iskali está activo. Si está apagado,
+// el jueves se comporta como cualquier otro día.
+function isIskaliDay(dateStr) {
+  return isThursday(dateStr) && state.config.metodoIskaliActivo;
+}
+
 async function loadConfig() {
   const res = await fetch("/api/config");
   state.config = await res.json();
@@ -17,16 +36,6 @@ async function loadConfig() {
   document.getElementById("privacyNotice").textContent = state.config.messages.privacyNotice;
 }
 
-function isThursday(dateStr) {
-  return new Date(dateStr + "T00:00:00").getDay() === 4;
-}
-
-// true solo si es jueves Y el Método Iskali está activo. Si está apagado,
-// el jueves se comporta exactamente como cualquier otro día.
-function isIskaliDay(dateStr) {
-  return isThursday(dateStr) && state.config.metodoIskaliActivo;
-}
-
 function renderHeader() {
   const b = state.config.business;
   document.getElementById("mapsLink").href = b.mapsUrl;
@@ -34,9 +43,9 @@ function renderHeader() {
   const todayIdx = new Date().getDay();
   const h = state.config.hours[todayIdx];
   if (h) {
-    document.getElementById("todayHours").textContent = `Hoy: ${h.open} – ${h.close}`;
+    document.getElementById("todayHours").textContent = `Hoy: ${to12Hour(h.open)} – ${to12Hour(h.close)}`;
   } else if (todayIdx === 4 && state.config.metodoIskaliActivo) {
-    document.getElementById("todayHours").textContent = `Hoy (jueves): ${state.config.metodoIskali.open} – ${state.config.metodoIskali.close}`;
+    document.getElementById("todayHours").textContent = `Hoy (jueves): ${to12Hour(state.config.metodoIskali.open)} – ${to12Hour(state.config.metodoIskali.close)}`;
   } else {
     document.getElementById("todayHours").textContent = "Hoy: cerrado";
   }
@@ -47,14 +56,30 @@ function renderHeader() {
 function renderServices() {
   const wrap = document.getElementById("services");
   wrap.innerHTML = "";
+  const fee = state.config.booking.reservationFee;
   state.config.services.forEach((s) => {
     const el = document.createElement("button");
     el.type = "button";
     el.className = "service-card";
-    el.innerHTML = `<span class="service-name">${s.name}</span><span class="service-meta">${s.price != null ? `$${s.price} · ` : ""}${s.duration} min</span>`;
+    el.innerHTML = `
+      <div class="service-main">
+        <span class="service-name">${s.icon ? s.icon + " " : ""}${s.name}</span>
+        ${s.tagline ? `<span class="service-tagline">${s.tagline}</span>` : ""}
+      </div>
+      <span class="service-meta">${s.price != null ? `$${s.price} · ` : ""}${s.duration} min</span>
+    `;
     el.addEventListener("click", () => selectService(s.id, el));
     wrap.appendChild(el);
   });
+  const existingFeeNote = document.getElementById("reservationFeeNote");
+  if (existingFeeNote) existingFeeNote.remove();
+  if (fee) {
+    const note = document.createElement("p");
+    note.id = "reservationFeeNote";
+    note.className = "note";
+    note.textContent = `Se agrega un cargo de $${fee} por agendado al confirmar tu cita.`;
+    wrap.after(note);
+  }
 }
 
 function selectService(id, el) {
@@ -188,7 +213,7 @@ async function refreshSlots() {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "slot-btn";
-    btn.textContent = s.time;
+    btn.textContent = to12Hour(s.time);
     btn.addEventListener("click", () => selectSlot(s.time, btn));
     slotsWrap.appendChild(btn);
   });
@@ -205,22 +230,37 @@ function selectSlot(time, el) {
 function renderSelectionSummary() {
   const el = document.getElementById("selectionSummary");
   const iskaliDay = isIskaliDay(state.selectedDate);
+  const fee = state.config.booking.reservationFee;
+  const dateTimeText = `${state.selectedDate} · ${to12Hour(state.selectedTime)}`;
+
+  let basePrice = null;
+  let headline = "";
 
   if (iskaliDay) {
     const mi = state.config.metodoIskali;
     const session = mi.sessions.find((s) => s.id === state.selectedSession);
     const addonNames = [...state.selectedAddons]
       .map((id) => mi.addons.find((a) => a.id === id))
-      .filter(Boolean)
-      .map((a) => a.name);
+      .filter(Boolean);
     let text = `${session.emoji} Sesión ${session.name}`;
-    if (addonNames.length) text += ` + ${addonNames.join(", ")}`;
-    el.textContent = `${text} · ${state.selectedDate} ${state.selectedTime}`;
+    if (addonNames.length) text += ` + ${addonNames.map((a) => a.name).join(", ")}`;
+    headline = text;
+    const prices = [session.price, ...addonNames.map((a) => a.price)];
+    basePrice = prices.every((p) => p != null) ? prices.reduce((sum, p) => sum + p, 0) : null;
   } else {
     const svc = state.config.services.find((s) => s.id === state.selectedService);
-    const priceText = svc.price != null ? ` · $${svc.price}` : "";
-    el.textContent = `${svc.name}${priceText} · ${state.selectedDate} ${state.selectedTime}`;
+    headline = `${svc.icon ? svc.icon + " " : ""}${svc.name}`;
+    basePrice = svc.price;
   }
+
+  let priceLine = "";
+  if (basePrice != null && fee) {
+    priceLine = ` · $${basePrice} + $${fee} de agendado = $${basePrice + fee}`;
+  } else if (basePrice != null) {
+    priceLine = ` · $${basePrice}`;
+  }
+
+  el.textContent = `${headline}${priceLine} · ${dateTimeText}`;
 }
 
 // ---------- Envío ----------

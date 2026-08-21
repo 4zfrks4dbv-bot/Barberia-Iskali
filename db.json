@@ -1,5 +1,7 @@
 {
   "appointments": [],
-  "blockedDates": []
+  "blockedDates": [],
+  "settings": {
+    "metodoIskaliActivo": true
+  }
 }
-
