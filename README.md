@@ -1,57 +1,95 @@
-# Iskali Barbería — Sistema de citas (v4)
+# Iskali Barbería — Sistema de citas (v5)
 
-## ⚠️ Antes de lanzar: lo único pendiente
+## ⚠️ MUY IMPORTANTE antes de subir esta versión
 
-1. **Precios** — en `config.js`, los 3 servicios normales, las 4 sesiones del Método Iskali y los 3 adicionales tienen `price: null`. Nombres, duraciones y qué incluye cada uno ya están confirmados por Luisillo; solo falta el precio en pesos de cada uno. En cuanto los tengas, se rellenan esos números en `config.js` y no hay que tocar nada más (ni `server.js` ni los archivos de `public/`).
-2. **Tipo de letra** — sigue con Fraunces + Inter por ahora. Cuando Luisillo te diga cuál quiere, se cambia en `public/style.css` (busca `font-family`) y en el `<link>` de Google Fonts de cada archivo `.html`.
+**No reemplaces el `db.json` que ya está corriendo en Render con el de esta
+carpeta.** El `db.json` de este zip es solo la plantilla para instalaciones
+nuevas (empieza vacío). Si el servidor ya tiene citas de clientes reales
+guardadas, sube todos los archivos de esta versión **menos `db.json`** —
+así no pierdes ninguna cita. La primera vez que arranque, el código agrega
+solo el campo `settings` que falta (ver más abajo), sin tocar las citas que
+ya haya.
 
-Las contraseñas del panel ya vienen puestas (`luisillo` / `iskali2026` para admin, `barbero` / `iskalibarb` para el barbero) — ver `.env`.
+## Qué cambió en esta versión (v5 — interruptor de Método Iskali)
 
-## Qué cambió en esta versión (v4 — Método Iskali)
+Ahora puedes prender o apagar el Método Iskali **desde el panel**, sin subir
+código nuevo cada vez que Luisillo cambie de opinión:
 
-- **Nueva sección en la página pública**: al elegir una fecha en jueves, aparece "El Método Iskali" en vez de los servicios normales (los jueves no hay servicios normales, solo Método Iskali — así está en `config.js`, `hours[4] = null`).
-- **4 sesiones libres, sin orden obligatorio**: Descubre 🧭, Define 🎯, Proyecta 🔥 y Trasciende 👑. Cualquier cliente puede elegir cualquiera directamente, no hay que "desbloquear" nada. Cada tarjeta muestra su nombre, descripción y qué agrega sobre la base común (que se muestra una sola vez arriba, para no repetirla 4 veces).
-- **3 adicionales opcionales** (perfilado de ceja, perfilado de barba, ritual de barba): se pueden sumar a cualquiera de las 4 sesiones, se seleccionan aparte con botones tipo pastilla, y se cobran aparte.
-- **Resumen de tu selección** antes de reservar (paso 3), para que el cliente vea exactamente qué eligió antes de confirmar.
-- **Panel admin**: al editar una cita de jueves, ahora aparece un selector para cambiar la sesión y checkboxes para los adicionales (antes solo se podía cambiar fecha/hora/nombre/teléfono). Los días normales se editan igual que antes.
-- Arreglo importante: `booking.js` todavía apuntaba a un solo "thursdayService" que ya no existe desde que se armó el Método Iskali de 4 sesiones en `config.js`/`server.js` — si alguien hubiera intentado agendar un jueves con la v3 tal cual, la página habría tronado. Ya quedó conectado correctamente.
+- **Nueva sección en `admin.html`** (solo visible para el rol admin): "Método
+  Iskali (jueves)" con un botón para Activar/Desactivar y el estado actual.
+- **Activo** → el jueves se ve y funciona exactamente como antes: los
+  clientes eligen entre las 4 sesiones (Descubre, Define, Proyecta,
+  Trasciende) más adicionales opcionales, en bloques fijos de 90 minutos.
+- **Inactivo** → el jueves se comporta como cualquier otro día: mismo
+  horario (10:00–19:30) y los mismos 4 servicios normales. Como Luisillo
+  atiende solo ese día, la capacidad ese día es de 1 cita a la vez (no se
+  puede traslapar), aunque entre semana sí hay 2 cupos simultáneos.
+  Además aparece una nota fija en la página: *"Los jueves te atiende
+  personalmente Luisillo, de principio a fin — mismo horario y mismos
+  servicios de siempre."*
+- El interruptor se guarda en `db.json` (campo `settings.metodoIskaliActivo`),
+  así que el cambio es inmediato y no requiere redesplegar.
+- El código de las dos versiones del jueves (Método Iskali y horario normal)
+  se queda completo en `server.js`, `public/booking.js` y `public/admin.js`
+  — nada se borra, así que puedes ir y venir entre los dos modos las veces
+  que haga falta.
+- El panel de citas, al editar una cita de jueves, ahora decide si mostrar
+  los campos de sesión/adicionales según si el Método Iskali está activo
+  **en este momento** (no según cómo se agendó la cita originalmente).
 
-## Versiones anteriores
+Por ahora está activado por defecto (`metodoIskaliActivo: true`), igual que
+como estaba funcionando hasta hoy. Lo desactivas tú cuando Luisillo te
+confirme que sí quiere el cambio.
 
-- El panel de citas y el de clientes se actualizan solos cada 15-30 segundos — no hace falta recargar la página para ver citas nuevas, y el buscador/filtro no se pierde al actualizarse.
-- Se quitó la imagen de portada — solo aparece el logotipo, grande y centrado.
+## Lo único pendiente de antes (sigue igual)
+
+En `config.js`, dentro de `metodoIskali`, las 4 sesiones y los 3 adicionales
+todavía tienen `price: null`. En cuanto Luis los confirme, se rellenan esos
+números ahí y no hay que tocar nada más.
+
+Las contraseñas del panel siguen igual (`luisillo` / `iskali2026` para
+admin, `barbero` / `iskalibarb` para el barbero) — ver `.env`.
 
 ## Cómo probarlo en tu computadora
 
 1. `npm install`
-2. Copia `.env.example` a `.env` y pon un usuario/contraseña de prueba (y opcionalmente los del barbero).
+2. Copia `.env.example` a `.env` (o usa el que ya tienes) y pon un
+   usuario/contraseña de prueba.
 3. `npm start`
 4. `http://localhost:3000` — página del cliente
 5. `http://localhost:3000/admin-login.html` — panel (citas + clientes)
 
 ## Actualizar tu proyecto existente en GitHub/Render
 
-Si ya tenías la versión 1 subida, solo reemplaza los archivos de esta carpeta sobre los tuyos (sí se puede sobrescribir todo) y vuelve a subir:
+1. Copia todos los archivos de esta carpeta sobre los tuyos **excepto
+   `db.json`** (ver la advertencia de arriba).
+2. `git add .`
+3. `git commit -m "Versión 5: interruptor de Método Iskali desde el panel"`
+4. `git push`
 
-```
-git add .
-git commit -m "Versión 4: Método Iskali completo (4 sesiones + adicionales)"
-git push
-```
+Render vuelve a desplegar solo en cuanto detecta el push.
 
-Render vuelve a desplegar solo en cuanto detecta el push. Si agregaste el rol de barbero, no olvides agregar `BARBER_USER` y `BARBER_PASS` en las variables de entorno de Render (Environment).
+## Sobre dónde se guardan los datos
 
-## ⚠️ Sobre dónde se guardan los datos
-
-Sigue igual que antes: las citas, los días bloqueados y todo lo demás se guardan en `db.json` dentro del servidor. En el plan gratuito de Render ese archivo se puede reiniciar (perder los datos) cuando el servicio se duerme o subes una actualización. Ya con un cliente real usándolo seguido, vale la pena moverlo a algo persistente — avísame cuando quieras dar ese paso.
+Sigue igual que antes: las citas, los días bloqueados y ahora también el
+interruptor de Método Iskali se guardan en `db.json` dentro del servidor. En
+el plan gratuito de Render ese archivo se puede reiniciar (perder los datos)
+cuando el servicio se duerme o subes una actualización. Ya con más clientes
+reales usándolo seguido, vale la pena moverlo a algo persistente — avísame
+cuando quieras dar ese paso.
 
 ## Estructura del proyecto
 
-- `config.js` — información del negocio (servicios, horarios, redes sociales, mensajes).
-- `server.js` — toda la lógica: disponibilidad, citas, roles, días bloqueados, clientes y estadísticas.
-- `db.js` — cómo se guardan y leen los datos.
+- `config.js` — información del negocio (servicios, horarios, Método Iskali,
+  redes sociales, mensajes). El "on/off" del Método Iskali NO vive aquí, vive
+  en `db.json`.
+- `server.js` — toda la lógica: disponibilidad, citas, roles, días
+  bloqueados, clientes, estadísticas y el interruptor de Método Iskali.
+- `db.js` — cómo se guardan y leen los datos (incluye `settings`).
 - `public/index.html` + `booking.js` — página del cliente.
-- `public/admin-login.html`, `admin.html` + `admin.js` — panel de citas (login, lista, calendario, bloqueo de días).
-- `public/clientes.html` + `clientes.js` — panel de clientes y estadísticas (solo admin).
+- `public/admin-login.html`, `admin.html` + `admin.js` — panel de citas
+  (login, lista, calendario, bloqueo de días, interruptor de Método Iskali).
+- `public/clientes.html` + `clientes.js` — panel de clientes y estadísticas
+  (solo admin).
 - `public/auth.js` — sesión compartida entre las páginas del panel.
 - `public/img/` — logo, portada y favicon.

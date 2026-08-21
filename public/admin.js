@@ -1,12 +1,3 @@
-// Convierte "HH:MM" (24h, como se guarda internamente) a "h:MM AM/PM" para mostrar.
-function to12Hour(t) {
-  const [h, m] = t.split(":").map(Number);
-  const period = h >= 12 ? "PM" : "AM";
-  let hour12 = h % 12;
-  if (hour12 === 0) hour12 = 12;
-  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
-}
-
 // ---------- Página de login ----------
 const loginBtn = document.getElementById("loginBtn");
 if (loginBtn) {
@@ -36,13 +27,26 @@ if (loginBtn) {
 // ---------- Panel de citas ----------
 const listEl = document.getElementById("appointmentsList");
 if (listEl) {
-  const state = { appointments: [], blockedDates: [], view: "list", calendarMonth: new Date(), dayFilter: null, searchTerm: "", businessConfig: null };
+  const state = {
+    appointments: [],
+    blockedDates: [],
+    view: "list",
+    calendarMonth: new Date(),
+    dayFilter: null,
+    searchTerm: "",
+    businessConfig: null, // trae metodoIskali (sesiones/adicionales) para el formulario de edición
+    metodoIskaliActivo: true,
+  };
 
   if (guardPage(false)) {
+    loadBusinessConfig(); // todos los roles la necesitan para saber si mostrar campos de Método Iskali al editar
+
     if (getRole() === "admin") {
       document.getElementById("blockedSection").hidden = false;
+      document.getElementById("iskaliToggleSection").hidden = false;
       loadBlockedDates();
-      loadBusinessConfig();
+      loadSettings();
+      document.getElementById("iskaliToggleBtn").addEventListener("click", toggleMetodoIskali);
     }
     document.getElementById("listViewBtn").addEventListener("click", () => setView("list"));
     document.getElementById("calendarViewBtn").addEventListener("click", () => setView("calendar"));
@@ -83,6 +87,49 @@ if (listEl) {
   async function loadBusinessConfig() {
     const res = await fetch("/api/config");
     state.businessConfig = await res.json();
+    state.metodoIskaliActivo = !!state.businessConfig.metodoIskaliActivo;
+  }
+
+  // ---- Interruptor de Método Iskali (solo admin) ----
+
+  async function loadSettings() {
+    const res = await authFetch("/api/admin/settings");
+    if (!res) return;
+    const data = await res.json();
+    state.metodoIskaliActivo = !!data.settings.metodoIskaliActivo;
+    renderIskaliToggle();
+  }
+
+  function renderIskaliToggle() {
+    const statusEl = document.getElementById("iskaliToggleStatus");
+    const helpEl = document.getElementById("iskaliToggleHelp");
+    const btn = document.getElementById("iskaliToggleBtn");
+    if (state.metodoIskaliActivo) {
+      statusEl.textContent = "Estado: Activo";
+      helpEl.textContent = "Los jueves los clientes ven y agendan las 4 sesiones del Método Iskali.";
+      btn.textContent = "Desactivar";
+    } else {
+      statusEl.textContent = "Estado: Inactivo";
+      helpEl.textContent = "Los jueves funcionan igual que cualquier otro día: mismo horario y servicios de siempre (solo atiende Luisillo).";
+      btn.textContent = "Activar";
+    }
+  }
+
+  async function toggleMetodoIskali() {
+    const nuevoValor = !state.metodoIskaliActivo;
+    const res = await authFetch("/api/admin/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ metodoIskaliActivo: nuevoValor }),
+    });
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || "No se pudo cambiar");
+      return;
+    }
+    state.metodoIskaliActivo = !!data.settings.metodoIskaliActivo;
+    renderIskaliToggle();
   }
 
   async function loadAppointments() {
@@ -132,17 +179,11 @@ if (listEl) {
     card.className = "appt-card";
     const statusLabels = { pendiente_confirmar: "Pendiente de confirmar", confirmada: "Confirmada", cancelada: "Cancelada" };
 
-    let priceText = "";
-    if (a.price != null) {
-      priceText = ` · $${a.price}`;
-      if (a.reservationFee) priceText += ` (incluye $${a.reservationFee} de agendado)`;
-    }
-
     card.innerHTML = `
       <div class="appt-top">
         <div>
-          <strong>${a.date} · ${to12Hour(a.time)}</strong><br>
-          <span class="note">${a.serviceName} (${a.duration} min)${priceText}</span>
+          <strong>${a.date} · ${a.time}</strong><br>
+          <span class="note">${a.serviceName} (${a.duration} min)${a.price != null ? ` · $${a.price}` : ""}</span>
         </div>
         ${isAdmin ? `
           <select data-id="${a.id}" class="statusSelect" style="width:auto;">
@@ -178,11 +219,16 @@ if (listEl) {
     if (!form.hidden) { form.hidden = true; return; }
     form.hidden = false;
 
+    // Los campos de sesión/adicionales del Método Iskali solo aparecen si la
+    // cita es de jueves Y el Método Iskali está activo ahora mismo. Si Luis
+    // lo desactivó después de que se agendó esta cita, se edita como cita
+    // normal (fecha, hora, nombre, teléfono).
     const isThursday = new Date(a.date + "T00:00:00").getDay() === 4;
     const mi = state.businessConfig && state.businessConfig.metodoIskali;
+    const mostrarCamposIskali = isThursday && state.metodoIskaliActivo && mi;
 
     let iskaliFieldsHtml = "";
-    if (isThursday && mi) {
+    if (mostrarCamposIskali) {
       const sessionOptions = mi.sessions
         .map((s) => `<option value="${s.id}" ${a.serviceId === s.id ? "selected" : ""}>${s.emoji} Sesión ${s.name}</option>`)
         .join("");
@@ -206,7 +252,7 @@ if (listEl) {
     form.innerHTML = `
       <label>Fecha</label>
       <input type="date" class="editDate" value="${a.date}">
-      <label>Hora (HH:MM, formato 24h)</label>
+      <label>Hora (HH:MM)</label>
       <input type="text" class="editTime" value="${a.time}">
       ${iskaliFieldsHtml}
       <label>Nombre</label>
@@ -223,7 +269,7 @@ if (listEl) {
         name: form.querySelector(".editName").value,
         phone: form.querySelector(".editPhone").value,
       };
-      if (isThursday && mi) {
+      if (mostrarCamposIskali) {
         payload.serviceId = form.querySelector(".editSession").value;
         payload.addons = [...form.querySelectorAll(".editAddon:checked")].map((el) => el.value);
       }

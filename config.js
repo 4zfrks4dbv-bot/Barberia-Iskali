@@ -2,7 +2,11 @@
 // Toda la información del negocio vive aquí. Edita este archivo cuando algo cambie
 // (precios, horarios, banco, textos). No hace falta tocar server.js para eso.
 //
-// Los campos que dicen null o "PENDIENTE" deben completarse antes de lanzar la página.
+// NOTA v5: el Método Iskali ahora se puede prender/apagar desde el panel de
+// admin (no hace falta tocar código ni redesplegar). El interruptor vive en
+// db.json (db.settings.metodoIskaliActivo), NO aquí. Aquí solo queda la
+// configuración de qué son las sesiones, precios, etc. — se usa o no según
+// ese interruptor.
 
 module.exports = {
   business: {
@@ -24,94 +28,47 @@ module.exports = {
   },
 
   // Horario normal por día de la semana. 0 = domingo ... 6 = sábado.
-  // El jueves (4) usa reglas especiales, ver thursdayRules más abajo.
+  // Esto se usa SIEMPRE para días normales, y también para el jueves cuando
+  // el Método Iskali está DESACTIVADO (ver capacityByDay más abajo: el
+  // jueves solo atiende Luisillo, con o sin Método Iskali).
   hours: {
     0: { open: "10:00", close: "18:00" }, // domingo
     1: { open: "10:00", close: "19:30" }, // lunes
     2: { open: "10:00", close: "19:30" }, // martes
     3: { open: "10:00", close: "19:30" }, // miércoles
-    4: null, // jueves: ver thursdayRules — todo el día es Método Iskali, sin servicios normales
+    4: { open: "10:00", close: "19:30" }, // jueves — horario normal (se usa si Método Iskali está apagado)
     5: { open: "10:00", close: "19:30" }, // viernes
     6: { open: "10:00", close: "19:30" }, // sábado
   },
 
-  // Cuántas citas pueden traslaparse al mismo tiempo en días normales.
-  // NOTA (18/08/26): Luisillo reportó que el mismo horario se pudo agendar
-  // dos veces. Con capacidad 2 eso es esperado (representa 2 barberos), pero
-  // si en días normales solo trabaja Luisillo, esto debe quedar en 1. Lo dejo
-  // en 1 por ahora — si en realidad hay un segundo barbero atendiendo cortes
-  // normales, súbelo de nuevo a 2 en este archivo.
-  capacityRegularDays: 1,
+  // Cuántas citas pueden traslaparse al mismo tiempo, por día. Si un día no
+  // aparece en capacityByDay, se usa capacityRegularDays.
+  capacityRegularDays: 2,
+  capacityByDay: {
+    4: 1, // jueves: solo atiende Luisillo (con Método Iskali activo o no)
+  },
 
-  // Jueves — "Método Iskali": solo Luisillo, sesiones largas, cupo limitado
-  thursdayRules: {
+  // Servicios de días normales — también son los que se ofrecen el jueves
+  // cuando el Método Iskali está desactivado. Precios confirmados por Luis
+  // el 16/08/26.
+  services: [
+    { id: "corte", name: "Corte de cabello", duration: 60, price: 140 },
+    { id: "corte_ceja", name: "Corte de cabello y ceja", duration: 60, price: 170 },
+    { id: "corte_barba", name: "Corte de cabello y barba", duration: 60, price: 200 },
+    { id: "corte_ceja_barba", name: "Corte de cabello, ceja y barba", duration: 75, price: 230 },
+  ],
+
+  // Método Iskali (jueves) — solo se usa si db.settings.metodoIskaliActivo
+  // es true. Si está en false, el jueves usa "hours" y "services" de arriba,
+  // como cualquier otro día.
+  metodoIskali: {
     open: "09:00",
     close: "20:00",
     sessionDuration: 90, // minutos, fijo para cualquiera de las 4 sesiones
     maxSessionsPerDay: 6,
     capacity: 1, // solo un barbero (Luisillo)
     lunchBreak: { start: "15:00", end: "16:00" }, // comida, ajustable
-  },
 
-  // Servicios de días normales (lun-mié, vie-dom).
-  // Actualizado el 18/08/26 según mensaje de WhatsApp de Luisillo: reemplaza
-  // por completo la lista anterior (nombres, iconos, taglines y precios).
-  // "icon" es el emoji que aparece junto al título del servicio en la página.
-  // "tagline" es la frase corta que va debajo del nombre.
-  services: [
-    {
-      id: "corte",
-      name: "Corte de cabello",
-      icon: "✂️",
-      tagline: "Estilo pensado para ti.",
-      duration: 45,
-      price: 120,
-    },
-    {
-      id: "corte_ceja",
-      name: "Corte de cabello + Arreglo de ceja",
-      icon: "👁️",
-      tagline: "Mayor definición facial.",
-      duration: 60,
-      price: 150,
-    },
-    {
-      id: "barba",
-      name: "Arreglo de barba",
-      icon: "🧔",
-      tagline: "Perfilado perfecto para ti.",
-      duration: 45,
-      price: 100,
-    },
-    {
-      id: "corte_barba",
-      name: "Corte de cabello + Arreglo de Barba",
-      icon: "💈",
-      tagline: "Imagen limpia y renovada.",
-      duration: 75,
-      price: 180,
-    },
-    {
-      id: "corte_barba_ceja",
-      name: "Corte de cabello + Arreglo de Barba + Arreglo de ceja",
-      icon: "👑",
-      tagline: "El cuidado completo de tu imagen.",
-      duration: 90,
-      price: 230,
-    },
-  ],
-
-  // Método Iskali — el servicio premium exclusivo de los jueves.
-  // 4 sesiones de nivel creciente (misma duración, 90 min), libres: cualquier
-  // cliente puede elegir la que quiera, no son progresivas ni tienen requisitos
-  // ni orden obligatorio.
-  // Además hay 3 adicionales opcionales que se pueden sumar a CUALQUIER sesión,
-  // con costo aparte (no vienen incluidos en ninguna sesión).
-  //
-  // PENDIENTE: precio (price) de cada sesión y de cada adicional. En cuanto
-  // Luis los confirme, solo hay que rellenar esos números aquí abajo — no hace
-  // falta tocar server.js ni los archivos de public/.
-  metodoIskali: {
     baseIncludes: [
       "Recepción personalizada",
       "Bebida de cortesía",
@@ -165,16 +122,13 @@ module.exports = {
   },
 
   booking: {
-    // Antes eran 2 horas; Luisillo pidió bajarlo a 30 minutos.
-    minAdvanceMinutes: 30,
+    minAdvanceHours: 2,
     maxAdvanceDays: 30,
     cancelationHours: 8,
-    // Recargo fijo que se cobra SIEMPRE al agendar (días normales y jueves),
-    // pero que NO se muestra en el precio del servicio — se suma al confirmar
-    // la cita, para que el precio del servicio se vea más bajo.
-    reservationFee: 20,
   },
 
+  // El mensaje de WhatsApp con los datos de la cita se arma dinámicamente en
+  // server.js (nombre, servicio, fecha y hora), aquí solo van los textos fijos.
   messages: {
     afterBooking:
       "¡Tu cita quedó registrada! Confírmala por WhatsApp con Iskali Barbería para que quede lista.",
@@ -182,5 +136,9 @@ module.exports = {
       "Los datos proporcionados serán utilizados únicamente para la administración de citas, atención al cliente y " +
       "comunicación relacionada con los servicios de Iskali Barbería. No serán compartidos con terceros sin " +
       "autorización del titular.",
+    // Se muestra en la página pública el jueves SOLO cuando el Método Iskali
+    // está desactivado.
+    thursdayNote:
+      "Los jueves te atiende personalmente Luisillo, de principio a fin — mismo horario y mismos servicios de siempre.",
   },
 };

@@ -41,6 +41,19 @@ function isDateBlocked(db, dateStr) {
   return (db.blockedDates || []).includes(dateStr);
 }
 
+// Cuántas citas pueden traslaparse ese día de la semana (2 barberos en días
+// normales, 1 solo el jueves porque atiende únicamente Luisillo).
+function getCapacityForDay(weekday) {
+  if (config.capacityByDay && Object.prototype.hasOwnProperty.call(config.capacityByDay, weekday)) {
+    return config.capacityByDay[weekday];
+  }
+  return config.capacityRegularDays;
+}
+
+function isMetodoIskaliActivo(db) {
+  return !!(db.settings && db.settings.metodoIskaliActivo);
+}
+
 // Revisa, en pasos de 5 minutos, que nunca haya más citas encimadas que "capacity"
 function isRangeFree(dayAppts, startMin, durationMin, capacity) {
   for (let t = startMin; t < startMin + durationMin; t += 5) {
@@ -60,14 +73,16 @@ function generateSlots(dateStr, serviceId) {
 
   const dayAppts = getDayAppointments(db, dateStr);
   const now = new Date();
-  const minAdvanceMs = config.booking.minAdvanceMinutes * 60000;
+  const minAdvanceMs = config.booking.minAdvanceHours * 3600000;
   const maxAdvanceMs = config.booking.maxAdvanceDays * 86400000;
 
   const target = new Date(dateStr + "T00:00:00");
   if (target.getTime() - now.getTime() > maxAdvanceMs) return [];
 
-  if (weekday === 4) {
-    const r = config.thursdayRules;
+  const esJuevesConMetodoIskali = weekday === 4 && isMetodoIskaliActivo(db);
+
+  if (esJuevesConMetodoIskali) {
+    const r = config.metodoIskali;
     if (dayAppts.length >= r.maxSessionsPerDay) return [];
     const openMin = timeToMinutes(r.open);
     const closeMin = timeToMinutes(r.close);
@@ -85,10 +100,13 @@ function generateSlots(dateStr, serviceId) {
     return slots;
   }
 
+  // Día normal (o jueves con Método Iskali desactivado): mismos servicios y
+  // horario de siempre, con la capacidad que le toque a ese día de la semana.
   const dayHours = config.hours[weekday];
   if (!dayHours) return [];
   const service = config.services.find((s) => s.id === serviceId);
   if (!service) return [];
+  const capacity = getCapacityForDay(weekday);
 
   const openMin = timeToMinutes(dayHours.open);
   const closeMin = timeToMinutes(dayHours.close);
@@ -96,7 +114,7 @@ function generateSlots(dateStr, serviceId) {
   for (let t = openMin; t + service.duration <= closeMin; t += 30) {
     const candidateDT = new Date(dateStr + "T" + minutesToTime(t) + ":00");
     if (candidateDT.getTime() - now.getTime() < minAdvanceMs) continue;
-    if (!isRangeFree(dayAppts, t, service.duration, config.capacityRegularDays)) continue;
+    if (!isRangeFree(dayAppts, t, service.duration, capacity)) continue;
     slots.push({ time: minutesToTime(t), duration: service.duration });
   }
   return slots;
@@ -106,14 +124,7 @@ function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
-// Suma el recargo fijo de agendado (config.booking.reservationFee) a un precio
-// base, siempre y cuando ese precio base ya esté confirmado (no sea null).
-function addReservationFee(basePrice) {
-  if (basePrice == null) return null;
-  return basePrice + config.booking.reservationFee;
-}
-
-// ---------- Método Iskali (jueves): arma la sesión + adicionales de una cita ----------
+// ---------- Método Iskali (jueves, si está activo): arma la sesión + adicionales ----------
 // Se usa tanto al crear la cita como al editarla desde el panel, para que el
 // nombre mostrado y la duración salgan siempre igual sin duplicar lógica.
 
@@ -134,15 +145,14 @@ function resolveMetodoIskali(serviceId, addonIds) {
   // Si algún precio (sesión o adicional) todavía es null, el total queda en
   // null en vez de un número incompleto/engañoso.
   const prices = [session.price, ...validAddons.map((a) => a.price)];
-  const basePrice = prices.every((p) => p != null) ? prices.reduce((sum, p) => sum + p, 0) : null;
+  const price = prices.every((p) => p != null) ? prices.reduce((sum, p) => sum + p, 0) : null;
 
   return {
     serviceId: session.id,
     serviceName,
-    duration: config.thursdayRules.sessionDuration,
+    duration: config.metodoIskali.sessionDuration,
     addons: validAddons.map((a) => a.id),
-    basePrice,
-    price: addReservationFee(basePrice),
+    price,
   };
 }
 
@@ -180,22 +190,19 @@ app.post("/api/admin/login", (req, res) => {
 // ---------- API pública ----------
 
 app.get("/api/config", (req, res) => {
-  const { business, hours, capacityRegularDays, thursdayRules, services, metodoIskali, booking, messages } = config;
+  const db = readDB();
+  const { business, hours, capacityRegularDays, metodoIskali, services, booking, messages } = config;
   res.json({
     business,
     hours,
     capacityRegularDays,
-    thursdayRules: {
-      open: thursdayRules.open,
-      close: thursdayRules.close,
-      sessionDuration: thursdayRules.sessionDuration,
-      maxSessionsPerDay: thursdayRules.maxSessionsPerDay,
-    },
-    services,
+    metodoIskaliActivo: isMetodoIskaliActivo(db),
     metodoIskali,
+    services,
     booking,
     messages: {
       privacyNotice: messages.privacyNotice,
+      thursdayNote: messages.thursdayNote,
     },
   });
 });
@@ -214,16 +221,18 @@ app.post("/api/appointments", (req, res) => {
   }
 
   const weekday = getWeekday(date);
-  let finalServiceId, serviceName, duration, finalAddons, basePrice, price;
+  const db = readDB();
+  const esJuevesConMetodoIskali = weekday === 4 && isMetodoIskaliActivo(db);
 
-  if (weekday === 4) {
+  let finalServiceId, serviceName, duration, finalAddons, price;
+
+  if (esJuevesConMetodoIskali) {
     const resolved = resolveMetodoIskali(serviceId, addons);
     if (!resolved) return res.status(400).json({ error: "Sesión no válida" });
     finalServiceId = resolved.serviceId;
     serviceName = resolved.serviceName;
     duration = resolved.duration;
     finalAddons = resolved.addons;
-    basePrice = resolved.basePrice;
     price = resolved.price;
   } else {
     const svc = config.services.find((s) => s.id === serviceId);
@@ -232,8 +241,7 @@ app.post("/api/appointments", (req, res) => {
     serviceName = svc.name;
     duration = svc.duration;
     finalAddons = [];
-    basePrice = svc.price;
-    price = addReservationFee(basePrice);
+    price = svc.price;
   }
 
   const availableTimes = generateSlots(date, finalServiceId).map((s) => s.time);
@@ -241,7 +249,6 @@ app.post("/api/appointments", (req, res) => {
     return res.status(409).json({ error: "Ese horario ya no está disponible, elige otro" });
   }
 
-  const db = readDB();
   const appt = {
     id: genId(),
     name,
@@ -252,10 +259,8 @@ app.post("/api/appointments", (req, res) => {
     duration,
     serviceId: finalServiceId,
     serviceName,
-    addons: finalAddons, // [] en días normales; ids de adicionales los jueves
-    basePrice, // precio del servicio sin el recargo de agendado
-    reservationFee: config.booking.reservationFee,
-    price, // total: basePrice + reservationFee (null si algún precio aún no está confirmado)
+    addons: finalAddons, // [] en días normales / jueves sin Método Iskali; ids de adicionales si aplica
+    price, // null si algún precio involucrado aún no está confirmado
     status: "pendiente_confirmar",
     createdAt: new Date().toISOString(),
   };
@@ -264,10 +269,9 @@ app.post("/api/appointments", (req, res) => {
 
   // Mensaje de WhatsApp con los datos reales de la cita, para que el barbero
   // confirme viendo quién es, qué pidió y cuándo.
-  const priceText = price != null ? ` Total: $${price} (incluye $${config.booking.reservationFee} de recargo por agendar).` : "";
   const waText =
     `Hola, soy ${name}. Quiero confirmar mi cita en Iskali Barbería: ` +
-    `${serviceName}, el ${date} a las ${time}.${priceText}`;
+    `${serviceName}, el ${date} a las ${time}.`;
   const whatsappLink = `https://wa.me/${config.business.whatsapp}?text=${encodeURIComponent(waText)}`;
 
   res.json({
@@ -276,6 +280,27 @@ app.post("/api/appointments", (req, res) => {
     whatsappLink,
     afterBookingMessage: config.messages.afterBooking,
   });
+});
+
+// ---------- API del panel: ajustes generales (solo admin) ----------
+// Por ahora solo controla si el Método Iskali está activo, pero queda
+// preparado para agregar más interruptores en el futuro sin tener que crear
+// nuevas rutas.
+
+app.get("/api/admin/settings", requireAuth, (req, res) => {
+  const db = readDB();
+  res.json({ settings: db.settings });
+});
+
+app.put("/api/admin/settings", requireAuth, requireAdmin, (req, res) => {
+  const { metodoIskaliActivo } = req.body || {};
+  if (typeof metodoIskaliActivo !== "boolean") {
+    return res.status(400).json({ error: "Falta metodoIskaliActivo (true/false)" });
+  }
+  const db = readDB();
+  db.settings.metodoIskaliActivo = metodoIskaliActivo;
+  writeDB(db);
+  res.json({ ok: true, settings: db.settings });
 });
 
 // ---------- API del panel: citas (lectura para ambos roles, escritura solo admin) ----------
@@ -300,9 +325,10 @@ app.put("/api/admin/appointments/:id", requireAuth, requireAdmin, (req, res) => 
 
   if (req.body.date || req.body.time || req.body.serviceId || req.body.addons) {
     const weekday = getWeekday(updated.date);
-    let duration, serviceName, serviceId, finalAddons, basePrice, price;
+    const esJuevesConMetodoIskali = weekday === 4 && isMetodoIskaliActivo(db);
+    let duration, serviceName, serviceId, finalAddons, price;
 
-    if (weekday === 4) {
+    if (esJuevesConMetodoIskali) {
       const wantedServiceId = req.body.serviceId || current.serviceId;
       const wantedAddons = req.body.addons !== undefined ? req.body.addons : current.addons;
       const resolved = resolveMetodoIskali(wantedServiceId, wantedAddons);
@@ -311,7 +337,6 @@ app.put("/api/admin/appointments/:id", requireAuth, requireAdmin, (req, res) => 
       serviceName = resolved.serviceName;
       duration = resolved.duration;
       finalAddons = resolved.addons;
-      basePrice = resolved.basePrice;
       price = resolved.price;
     } else {
       const svc =
@@ -322,12 +347,11 @@ app.put("/api/admin/appointments/:id", requireAuth, requireAdmin, (req, res) => 
       serviceName = svc.name;
       duration = svc.duration;
       finalAddons = [];
-      basePrice = svc.price;
-      price = addReservationFee(basePrice);
+      price = svc.price;
     }
 
     const dayAppts = getDayAppointments(db, updated.date).filter((a) => a.id !== current.id);
-    const capacity = weekday === 4 ? config.thursdayRules.capacity : config.capacityRegularDays;
+    const capacity = esJuevesConMetodoIskali ? config.metodoIskali.capacity : getCapacityForDay(weekday);
     if (!isRangeFree(dayAppts, timeToMinutes(updated.time), duration, capacity)) {
       return res.status(409).json({ error: "Ese horario ya está ocupado" });
     }
@@ -336,8 +360,6 @@ app.put("/api/admin/appointments/:id", requireAuth, requireAdmin, (req, res) => 
     updated.serviceName = serviceName;
     updated.duration = duration;
     updated.addons = finalAddons;
-    updated.basePrice = basePrice;
-    updated.reservationFee = config.booking.reservationFee;
     updated.price = price;
     updated.startMinutes = timeToMinutes(updated.time);
   }

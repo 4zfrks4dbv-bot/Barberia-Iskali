@@ -1,6 +1,6 @@
 {
   "name": "iskali-barberia-autoplanner",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "description": "Sistema de citas para Iskali Barbería, hecho con AutoPlanner",
   "main": "server.js",
   "scripts": {

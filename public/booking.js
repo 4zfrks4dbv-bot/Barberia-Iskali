@@ -1,29 +1,30 @@
 const state = {
   config: null,
-  selectedService: null, // días normales
+  selectedService: null, // días normales / jueves sin Método Iskali
   selectedSession: null, // jueves — Método Iskali
   selectedAddons: new Set(), // jueves — adicionales opcionales
   selectedDate: null,
   selectedTime: null,
 };
 
-// Convierte "HH:MM" (24h, como se guarda internamente) a "h:MM AM/PM" para mostrar.
-function to12Hour(t) {
-  const [h, m] = t.split(":").map(Number);
-  const period = h >= 12 ? "PM" : "AM";
-  let hour12 = h % 12;
-  if (hour12 === 0) hour12 = 12;
-  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
-}
-
 async function loadConfig() {
   const res = await fetch("/api/config");
   state.config = await res.json();
   renderHeader();
   renderServices();
-  renderMetodoIskali();
+  if (state.config.metodoIskaliActivo) renderMetodoIskali();
   setupDateInput();
   document.getElementById("privacyNotice").textContent = state.config.messages.privacyNotice;
+}
+
+function isThursday(dateStr) {
+  return new Date(dateStr + "T00:00:00").getDay() === 4;
+}
+
+// true solo si es jueves Y el Método Iskali está activo. Si está apagado,
+// el jueves se comporta exactamente como cualquier otro día.
+function isIskaliDay(dateStr) {
+  return isThursday(dateStr) && state.config.metodoIskaliActivo;
 }
 
 function renderHeader() {
@@ -32,37 +33,28 @@ function renderHeader() {
   document.getElementById("waLink").href = `https://wa.me/${b.whatsapp}`;
   const todayIdx = new Date().getDay();
   const h = state.config.hours[todayIdx];
-  document.getElementById("todayHours").textContent = h
-    ? `Hoy: ${to12Hour(h.open)} – ${to12Hour(h.close)}`
-    : `Hoy (jueves): ${to12Hour(state.config.thursdayRules.open)} – ${to12Hour(state.config.thursdayRules.close)}`;
+  if (h) {
+    document.getElementById("todayHours").textContent = `Hoy: ${h.open} – ${h.close}`;
+  } else if (todayIdx === 4 && state.config.metodoIskaliActivo) {
+    document.getElementById("todayHours").textContent = `Hoy (jueves): ${state.config.metodoIskali.open} – ${state.config.metodoIskali.close}`;
+  } else {
+    document.getElementById("todayHours").textContent = "Hoy: cerrado";
+  }
 }
 
-// ---------- Días normales ----------
+// ---------- Días normales (y jueves cuando Método Iskali está apagado) ----------
 
 function renderServices() {
   const wrap = document.getElementById("services");
   wrap.innerHTML = "";
-  const fee = state.config.booking.reservationFee;
   state.config.services.forEach((s) => {
     const el = document.createElement("button");
     el.type = "button";
     el.className = "service-card";
-    el.innerHTML = `
-      <div class="service-main">
-        <span class="service-name">${s.icon ? s.icon + " " : ""}${s.name}</span>
-        ${s.tagline ? `<span class="service-tagline">${s.tagline}</span>` : ""}
-      </div>
-      <span class="service-meta">${s.price != null ? `$${s.price} · ` : ""}${s.duration} min</span>
-    `;
+    el.innerHTML = `<span class="service-name">${s.name}</span><span class="service-meta">${s.price != null ? `$${s.price} · ` : ""}${s.duration} min</span>`;
     el.addEventListener("click", () => selectService(s.id, el));
     wrap.appendChild(el);
   });
-  if (fee) {
-    const note = document.createElement("p");
-    note.className = "note";
-    note.textContent = `Se agrega un cargo de $${fee} por agendado al confirmar tu cita.`;
-    wrap.after(note);
-  }
 }
 
 function selectService(id, el) {
@@ -72,7 +64,7 @@ function selectService(id, el) {
   refreshSlots();
 }
 
-// ---------- Jueves — Método Iskali ----------
+// ---------- Jueves — Método Iskali (solo si está activo) ----------
 
 function renderMetodoIskali() {
   const mi = state.config.metodoIskali;
@@ -147,10 +139,21 @@ function setupDateInput() {
   input.max = max.toISOString().split("T")[0];
   input.addEventListener("change", () => {
     state.selectedDate = input.value;
-    const isThursday = new Date(input.value + "T00:00:00").getDay() === 4;
-    document.getElementById("thursdayNote").hidden = !isThursday;
-    document.getElementById("servicesSection").hidden = isThursday;
-    document.getElementById("metodoIskaliSection").hidden = !isThursday;
+    const iskaliDay = isIskaliDay(input.value);
+    const note = document.getElementById("thursdayNote");
+
+    if (iskaliDay) {
+      note.textContent = "Los jueves solo hay 6 sesiones de 90 minutos disponibles, la experiencia completa con Luisillo.";
+      note.hidden = false;
+    } else if (isThursday(input.value)) {
+      note.textContent = state.config.messages.thursdayNote;
+      note.hidden = false;
+    } else {
+      note.hidden = true;
+    }
+
+    document.getElementById("servicesSection").hidden = iskaliDay;
+    document.getElementById("metodoIskaliSection").hidden = !iskaliDay;
     refreshSlots();
   });
 }
@@ -161,19 +164,18 @@ async function refreshSlots() {
   document.getElementById("contactSection").hidden = true;
   if (!state.selectedDate) return;
 
-  const weekday = new Date(state.selectedDate + "T00:00:00").getDay();
-  const isThursday = weekday === 4;
+  const iskaliDay = isIskaliDay(state.selectedDate);
 
-  if (isThursday && !state.selectedSession) {
+  if (iskaliDay && !state.selectedSession) {
     slotsWrap.innerHTML = '<p class="note">Elige tu sesión primero.</p>';
     return;
   }
-  if (!isThursday && !state.selectedService) {
+  if (!iskaliDay && !state.selectedService) {
     slotsWrap.innerHTML = '<p class="note">Elige un servicio primero.</p>';
     return;
   }
 
-  const serviceParam = isThursday ? state.selectedSession : state.selectedService;
+  const serviceParam = iskaliDay ? state.selectedSession : state.selectedService;
   const res = await fetch(`/api/availability?date=${state.selectedDate}&service=${serviceParam}`);
   const data = await res.json();
 
@@ -186,7 +188,7 @@ async function refreshSlots() {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "slot-btn";
-    btn.textContent = to12Hour(s.time);
+    btn.textContent = s.time;
     btn.addEventListener("click", () => selectSlot(s.time, btn));
     slotsWrap.appendChild(btn);
   });
@@ -202,38 +204,23 @@ function selectSlot(time, el) {
 
 function renderSelectionSummary() {
   const el = document.getElementById("selectionSummary");
-  const weekday = new Date(state.selectedDate + "T00:00:00").getDay();
-  const fee = state.config.booking.reservationFee;
-  const dateTimeText = `${state.selectedDate} · ${to12Hour(state.selectedTime)}`;
+  const iskaliDay = isIskaliDay(state.selectedDate);
 
-  let basePrice = null;
-  let headline = "";
-
-  if (weekday === 4) {
+  if (iskaliDay) {
     const mi = state.config.metodoIskali;
     const session = mi.sessions.find((s) => s.id === state.selectedSession);
     const addonNames = [...state.selectedAddons]
       .map((id) => mi.addons.find((a) => a.id === id))
-      .filter(Boolean);
+      .filter(Boolean)
+      .map((a) => a.name);
     let text = `${session.emoji} Sesión ${session.name}`;
-    if (addonNames.length) text += ` + ${addonNames.map((a) => a.name).join(", ")}`;
-    headline = text;
-    const prices = [session.price, ...addonNames.map((a) => a.price)];
-    basePrice = prices.every((p) => p != null) ? prices.reduce((sum, p) => sum + p, 0) : null;
+    if (addonNames.length) text += ` + ${addonNames.join(", ")}`;
+    el.textContent = `${text} · ${state.selectedDate} ${state.selectedTime}`;
   } else {
     const svc = state.config.services.find((s) => s.id === state.selectedService);
-    headline = `${svc.icon ? svc.icon + " " : ""}${svc.name}`;
-    basePrice = svc.price;
+    const priceText = svc.price != null ? ` · $${svc.price}` : "";
+    el.textContent = `${svc.name}${priceText} · ${state.selectedDate} ${state.selectedTime}`;
   }
-
-  let priceLine = "";
-  if (basePrice != null && fee) {
-    priceLine = ` · $${basePrice} + $${fee} de agendado = $${basePrice + fee}`;
-  } else if (basePrice != null) {
-    priceLine = ` · $${basePrice}`;
-  }
-
-  el.textContent = `${headline}${priceLine} · ${dateTimeText}`;
 }
 
 // ---------- Envío ----------
@@ -250,10 +237,9 @@ document.getElementById("submitBtn").addEventListener("click", async () => {
     return;
   }
 
-  const weekday = new Date(state.selectedDate + "T00:00:00").getDay();
-  const isThursday = weekday === 4;
-  const serviceId = isThursday ? state.selectedSession : state.selectedService;
-  const addons = isThursday ? [...state.selectedAddons] : [];
+  const iskaliDay = isIskaliDay(state.selectedDate);
+  const serviceId = iskaliDay ? state.selectedSession : state.selectedService;
+  const addons = iskaliDay ? [...state.selectedAddons] : [];
 
   const res = await fetch("/api/appointments", {
     method: "POST",
