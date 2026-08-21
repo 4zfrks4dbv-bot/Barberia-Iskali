@@ -105,7 +105,7 @@ function renderMetodoIskali() {
     el.className = "session-card";
     el.dataset.id = s.id;
 
-    const dots = mi.sessions.map((_, i) => `<span class="dot${i <= idx ? " on" : ""}"></span>`).join("");
+    const dots = mi.sessions.map((_, i) => `<span class="dot${i <= idx ? " on" : ""}></span>`).join("");
     const extrasHtml = s.extras.length
       ? `<p class="session-extras">+ ${s.extras.join(" · ")}</p>`
       : `<p class="session-extras">La experiencia base del Método Iskali</p>`;
@@ -130,7 +130,7 @@ function renderMetodoIskali() {
     el.type = "button";
     el.className = "addon-pill";
     el.dataset.id = a.id;
-    el.textContent = a.name;
+    el.textContent = `${a.name} · $${a.price}`;
     el.addEventListener("click", () => toggleAddon(a.id, el));
     addonsWrap.appendChild(el);
   });
