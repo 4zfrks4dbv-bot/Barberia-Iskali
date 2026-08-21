@@ -145,9 +145,9 @@ module.exports = {
     ],
 
     addons: [
-      { id: "perfilado_ceja", name: "Perfilado de ceja", price: null },
-      { id: "perfilado_barba", name: "Perfilado de barba", price: null },
-      { id: "ritual_barba", name: "Ritual de barba", price: null },
+      { id: "perfilado_ceja", name: "Perfilado de ceja", price: 40 },
+      { id: "perfilado_barba", name: "Perfilado de barba", price: 120 },
+      { id: "ritual_barba", name: "Ritual de barba", price: 170 },
     ],
   },
 
