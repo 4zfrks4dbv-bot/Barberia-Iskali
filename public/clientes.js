@@ -26,8 +26,8 @@ async function loadStats() {
   grid.innerHTML = `
     <div class="stat-box"><div class="num">${data.totalAppointments}</div><div class="label">Citas totales</div></div>
     <div class="stat-box"><div class="num">${data.thisMonthCount}</div><div class="label">Este mes</div></div>
-    <div class="stat-box"><div class="num" style="font-size:1.1rem;">${data.busiestWeekday || "—"}</div><div class="label">Día más ocupado</div></div>
-    <div class="stat-box"><div class="num" style="font-size:1rem;">${data.topService ? data.topService.name : "—"}</div><div class="label">Servicio más pedido${data.topService ? ` (${data.topService.count})` : ""}</div></div>
+    <div class="stat-box"><div class="num" style="font-size:1.1rem;">${escapeHtml(data.busiestWeekday || "—")}</div><div class="label">Día más ocupado</div></div>
+    <div class="stat-box"><div class="num" style="font-size:1rem;">${data.topService ? escapeHtml(data.topService.name) : "—"}</div><div class="label">Servicio más pedido${data.topService ? ` (${data.topService.count})` : ""}</div></div>
   `;
 }
 
@@ -54,7 +54,7 @@ function renderClients() {
     const row = document.createElement("div");
     row.className = "client-row";
     row.innerHTML = `
-      <div><strong>${c.name}</strong><br><span class="note">${c.phone} · última visita ${c.lastDate}</span></div>
+      <div><strong>${escapeHtml(c.name)}</strong><br><span class="note">${escapeHtml(c.phone)} · última visita ${escapeHtml(c.lastDate)}</span></div>
       <span class="visits">${c.visits} ${c.visits === 1 ? "visita" : "visitas"}</span>
     `;
     row.addEventListener("click", () => showHistory(c.phone, c.name));
@@ -72,7 +72,7 @@ async function showHistory(phone, name) {
   data.history.forEach((a) => {
     const row = document.createElement("div");
     row.className = "appt-card";
-    row.innerHTML = `<strong>${a.date} · ${a.time}</strong><br><span class="note">${a.serviceName} — ${a.status}</span>`;
+    row.innerHTML = `<strong>${escapeHtml(a.date)} · ${escapeHtml(a.time)}</strong><br><span class="note">${escapeHtml(a.serviceName)} — ${escapeHtml(a.status)}</span>`;
     list.appendChild(row);
   });
   document.getElementById("historySection").hidden = false;

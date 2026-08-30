@@ -150,7 +150,7 @@ if (listEl) {
     if (state.dayFilter) {
       const banner = document.createElement("p");
       banner.className = "note";
-      banner.innerHTML = `Mostrando citas del <strong>${state.dayFilter}</strong> — <a href="#" id="clearDayFilter" style="color:var(--yellow);">ver todas</a>`;
+      banner.innerHTML = `Mostrando citas del <strong>${escapeHtml(state.dayFilter)}</strong> — <a href="#" id="clearDayFilter" style="color:var(--yellow);">ver todas</a>`;
       listEl.appendChild(banner);
       banner.querySelector("#clearDayFilter").addEventListener("click", (e) => {
         e.preventDefault();
@@ -182,8 +182,8 @@ if (listEl) {
     card.innerHTML = `
       <div class="appt-top">
         <div>
-          <strong>${a.date} · ${a.time}</strong><br>
-          <span class="note">${a.serviceName} (${a.duration} min)${priceLine}</span>
+          <strong>${escapeHtml(a.date)} · ${escapeHtml(a.time)}</strong><br>
+          <span class="note">${escapeHtml(a.serviceName)} (${a.duration} min)${priceLine}</span>
         </div>
         ${isAdmin ? `
           <select data-id="${a.id}" class="statusSelect" style="width:auto;">
@@ -191,9 +191,9 @@ if (listEl) {
             <option value="confirmada" ${a.status === "confirmada" ? "selected" : ""}>Confirmada</option>
             <option value="cancelada" ${a.status === "cancelada" ? "selected" : ""}>Cancelada</option>
           </select>
-        ` : `<span class="role-badge">${statusLabels[a.status] || a.status}</span>`}
+        ` : `<span class="role-badge">${escapeHtml(statusLabels[a.status] || a.status)}</span>`}
       </div>
-      <p style="margin:10px 0 4px;">${a.name} · ${a.phone}</p>
+      <p style="margin:10px 0 4px;">${escapeHtml(a.name)} · ${escapeHtml(a.phone)}</p>
       ${isAdmin ? `
         <div class="appt-actions">
           <button class="editBtn btn-secondary">Editar</button>
@@ -226,14 +226,14 @@ if (listEl) {
     let iskaliFieldsHtml = "";
     if (mostrarCamposIskali) {
       const sessionOptions = mi.sessions
-        .map((s) => `<option value="${s.id}" ${a.serviceId === s.id ? "selected" : ""}>${s.emoji} Sesión ${s.name}</option>`)
+        .map((s) => `<option value="${escapeHtml(s.id)}" ${a.serviceId === s.id ? "selected" : ""}>${escapeHtml(s.emoji)} Sesión ${escapeHtml(s.name)}</option>`)
         .join("");
       const addonChecks = mi.addons
         .map(
           (ad) => `
         <label style="display:flex;align-items:center;gap:8px;margin:6px 0 0;font-size:.9rem;color:var(--bone);">
-          <input type="checkbox" class="editAddon" value="${ad.id}" ${(a.addons || []).includes(ad.id) ? "checked" : ""} style="width:auto;">
-          ${ad.name}
+          <input type="checkbox" class="editAddon" value="${escapeHtml(ad.id)}" ${(a.addons || []).includes(ad.id) ? "checked" : ""} style="width:auto;">
+          ${escapeHtml(ad.name)}
         </label>`
         )
         .join("");
@@ -247,14 +247,14 @@ if (listEl) {
 
     form.innerHTML = `
       <label>Fecha</label>
-      <input type="date" class="editDate" value="${a.date}">
+      <input type="date" class="editDate" value="${escapeHtml(a.date)}">
       <label>Hora (HH:MM)</label>
-      <input type="text" class="editTime" value="${a.time}">
+      <input type="text" class="editTime" value="${escapeHtml(a.time)}">
       ${iskaliFieldsHtml}
       <label>Nombre</label>
-      <input type="text" class="editName" value="${a.name}">
+      <input type="text" class="editName" value="${escapeHtml(a.name)}">
       <label>Teléfono</label>
-      <input type="text" class="editPhone" value="${a.phone}">
+      <input type="text" class="editPhone" value="${escapeHtml(a.phone)}">
       <button class="saveEditBtn">Guardar cambios</button>
       <p class="editError error" hidden></p>
     `;
@@ -365,7 +365,7 @@ if (listEl) {
     state.blockedDates.forEach((date) => {
       const pill = document.createElement("div");
       pill.className = "blocked-pill";
-      pill.innerHTML = `<span>${date}</span><button>Quitar</button>`;
+      pill.innerHTML = `<span>${escapeHtml(date)}</span><button>Quitar</button>`;
       pill.querySelector("button").addEventListener("click", async () => {
         const res = await authFetch(`/api/admin/blocked-dates/${date}`, { method: "DELETE" });
         if (!res) return;

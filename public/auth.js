@@ -13,6 +13,21 @@ function clearAuth() {
   localStorage.removeItem(ROLE_KEY);
 }
 
+// Escapa texto que viene de datos de clientes (nombre, teléfono, etc.) antes de
+// insertarlo en innerHTML o en atributos como value="...". Sin esto, alguien
+// podría meter <script> como "nombre" al agendar una cita pública y ejecutar
+// código cuando el admin abre el panel (robo de sesión). SIEMPRE usar esta
+// función al insertar datos de citas/clientes en el DOM vía innerHTML.
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[c]));
+}
+
 // fetch con el token ya puesto; si el servidor responde 401, manda a login.
 async function authFetch(url, options = {}) {
   const opts = { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${getToken()}` } };

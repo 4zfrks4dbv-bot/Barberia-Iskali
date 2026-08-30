@@ -11,6 +11,44 @@ const { readDB, writeDB } = require("./db");
 const app = express();
 app.use(express.json());
 
+// ---------- Rate limiting simple en memoria ----------
+// No agrega dependencias nuevas. Suficiente para un solo servidor Render;
+// si en el futuro corres varias instancias, cambiar esto por algo compartido
+// (ej. Redis) o usar express-rate-limit con un store externo.
+
+function makeRateLimiter({ windowMs, max, message }) {
+  const hits = new Map(); // ip -> { count, resetAt }
+  return function rateLimiter(req, res, next) {
+    const ip = req.ip || req.connection.remoteAddress || "unknown";
+    const now = Date.now();
+    let entry = hits.get(ip);
+    if (!entry || now > entry.resetAt) {
+      entry = { count: 0, resetAt: now + windowMs };
+    }
+    entry.count += 1;
+    hits.set(ip, entry);
+    if (entry.count > max) {
+      return res.status(429).json({ error: message });
+    }
+    next();
+  };
+}
+
+// Login: máximo 10 intentos cada 15 minutos por IP (evita fuerza bruta).
+const loginRateLimit = makeRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: "Demasiados intentos de inicio de sesión. Espera unos minutos.",
+});
+
+// Citas públicas: máximo 20 solicitudes cada 10 minutos por IP (evita spam
+// de citas falsas desde un script).
+const bookingRateLimit = makeRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  message: "Demasiadas solicitudes. Espera unos minutos e intenta de nuevo.",
+});
+
 // ---------- Helpers de horario ----------
 
 function timeToMinutes(t) {
@@ -121,6 +159,16 @@ function addReservationFee(basePrice) {
   return basePrice + config.booking.reservationFee;
 }
 
+// Valida y recorta nombre/teléfono para que no se guarde basura ni cadenas
+// enormes en db.json. La defensa real contra XSS vive en el frontend
+// (escapeHtml), esto es higiene de datos adicional.
+function sanitizeContact(name, phone) {
+  const cleanName = String(name || "").trim().slice(0, 80);
+  const cleanPhone = String(phone || "").trim().slice(0, 20);
+  if (!cleanName || !cleanPhone) return null;
+  return { name: cleanName, phone: cleanPhone };
+}
+
 // ---------- Método Iskali: arma la sesión + adicionales de una cita ----------
 
 function resolveMetodoIskali(serviceId, addonIds) {
@@ -168,7 +216,7 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-app.post("/api/admin/login", (req, res) => {
+app.post("/api/admin/login", loginRateLimit, (req, res) => {
   const { user, pass } = req.body || {};
   let role = null;
   if (user === process.env.ADMIN_USER && pass === process.env.ADMIN_PASS) role = "admin";
@@ -208,10 +256,15 @@ app.get("/api/availability", (req, res) => {
   res.json({ date, slots });
 });
 
-app.post("/api/appointments", (req, res) => {
+app.post("/api/appointments", bookingRateLimit, (req, res) => {
   const { name, phone, date, time, serviceId, addons } = req.body || {};
   if (!name || !phone || !date || !time || !serviceId) {
     return res.status(400).json({ error: "Faltan datos para reservar la cita" });
+  }
+
+  const contact = sanitizeContact(name, phone);
+  if (!contact) {
+    return res.status(400).json({ error: "Nombre o teléfono inválido" });
   }
 
   const weekday = getWeekday(date);
@@ -247,8 +300,8 @@ app.post("/api/appointments", (req, res) => {
 
   const appt = {
     id: genId(),
-    name,
-    phone,
+    name: contact.name,
+    phone: contact.phone,
     date,
     time,
     startMinutes: timeToMinutes(time),
@@ -267,7 +320,7 @@ app.post("/api/appointments", (req, res) => {
 
   const priceText = price != null ? ` Total: $${price} (incluye $${config.booking.reservationFee} de cuota por agendar).` : "";
   const waText =
-    `Hola, soy ${name}. Quiero confirmar mi cita en Iskali Barbería: ` +
+    `Hola, soy ${appt.name}. Quiero confirmar mi cita en Iskali Barbería: ` +
     `${serviceName}, el ${date} a las ${time}.${priceText}`;
   const whatsappLink = `https://wa.me/${config.business.whatsapp}?text=${encodeURIComponent(waText)}`;
 
@@ -316,6 +369,16 @@ app.put("/api/admin/appointments/:id", requireAuth, requireAdmin, (req, res) => 
 
   const current = db.appointments[idx];
   const updated = { ...current, ...req.body };
+
+  if (req.body.name !== undefined || req.body.phone !== undefined) {
+    const contact = sanitizeContact(
+      req.body.name !== undefined ? req.body.name : current.name,
+      req.body.phone !== undefined ? req.body.phone : current.phone
+    );
+    if (!contact) return res.status(400).json({ error: "Nombre o teléfono inválido" });
+    updated.name = contact.name;
+    updated.phone = contact.phone;
+  }
 
   if (req.body.date || req.body.time || req.body.serviceId || req.body.addons) {
     const weekday = getWeekday(updated.date);
