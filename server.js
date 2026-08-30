@@ -11,13 +11,20 @@ const { readDB, writeDB } = require("./db");
 const app = express();
 app.use(express.json());
 
-// ---------- Rate limiting simple en memoria ----------
-// No agrega dependencias nuevas. Suficiente para un solo servidor Render;
-// si en el futuro corres varias instancias, cambiar esto por algo compartido
-// (ej. Redis) o usar express-rate-limit con un store externo.
+// Envuelve rutas async para que los errores no tumben el servidor ni dejen
+// la request colgada — cualquier error se convierte en un 500 limpio.
+function asyncHandler(fn) {
+  return (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch((err) => {
+      console.error(err);
+      res.status(500).json({ error: "Error interno del servidor" });
+    });
+  };
+}
 
+// ---------- Rate limiting simple en memoria ----------
 function makeRateLimiter({ windowMs, max, message }) {
-  const hits = new Map(); // ip -> { count, resetAt }
+  const hits = new Map();
   return function rateLimiter(req, res, next) {
     const ip = req.ip || req.connection.remoteAddress || "unknown";
     const now = Date.now();
@@ -34,15 +41,12 @@ function makeRateLimiter({ windowMs, max, message }) {
   };
 }
 
-// Login: máximo 10 intentos cada 15 minutos por IP (evita fuerza bruta).
 const loginRateLimit = makeRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: "Demasiados intentos de inicio de sesión. Espera unos minutos.",
 });
 
-// Citas públicas: máximo 20 solicitudes cada 10 minutos por IP (evita spam
-// de citas falsas desde un script).
 const bookingRateLimit = makeRateLimiter({
   windowMs: 10 * 60 * 1000,
   max: 20,
@@ -97,9 +101,10 @@ function isRangeFree(dayAppts, startMin, durationMin, capacity) {
   return true;
 }
 
-function generateSlots(dateStr, serviceId) {
+// Ahora es async porque adentro hace readDB() contra Postgres.
+async function generateSlots(dateStr, serviceId) {
   const weekday = getWeekday(dateStr);
-  const db = readDB();
+  const db = await readDB();
   if (isDateBlocked(db, dateStr)) return [];
 
   const dayAppts = getDayAppointments(db, dateStr);
@@ -130,7 +135,6 @@ function generateSlots(dateStr, serviceId) {
     return slots;
   }
 
-  // Día normal, o jueves con Método Iskali desactivado.
   const dayHours = config.hours[weekday];
   if (!dayHours) return [];
   const service = config.services.find((s) => s.id === serviceId);
@@ -153,23 +157,17 @@ function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
-// Suma el recargo fijo de agendado a un precio base ya confirmado (no null).
 function addReservationFee(basePrice) {
   if (basePrice == null) return null;
   return basePrice + config.booking.reservationFee;
 }
 
-// Valida y recorta nombre/teléfono para que no se guarde basura ni cadenas
-// enormes en db.json. La defensa real contra XSS vive en el frontend
-// (escapeHtml), esto es higiene de datos adicional.
 function sanitizeContact(name, phone) {
   const cleanName = String(name || "").trim().slice(0, 80);
   const cleanPhone = String(phone || "").trim().slice(0, 20);
   if (!cleanName || !cleanPhone) return null;
   return { name: cleanName, phone: cleanPhone };
 }
-
-// ---------- Método Iskali: arma la sesión + adicionales de una cita ----------
 
 function resolveMetodoIskali(serviceId, addonIds) {
   const session = config.metodoIskali.sessions.find((s) => s.id === serviceId);
@@ -198,7 +196,7 @@ function resolveMetodoIskali(serviceId, addonIds) {
   };
 }
 
-// ---------- Autenticación del panel (dos roles: admin y barbero) ----------
+// ---------- Autenticación del panel ----------
 
 const validTokens = new Map();
 
@@ -231,8 +229,8 @@ app.post("/api/admin/login", loginRateLimit, (req, res) => {
 
 // ---------- API pública ----------
 
-app.get("/api/config", (req, res) => {
-  const db = readDB();
+app.get("/api/config", asyncHandler(async (req, res) => {
+  const db = await readDB();
   const { business, hours, capacityRegularDays, metodoIskali, services, booking, messages } = config;
   res.json({
     business,
@@ -247,16 +245,16 @@ app.get("/api/config", (req, res) => {
       thursdayNote: messages.thursdayNote,
     },
   });
-});
+}));
 
-app.get("/api/availability", (req, res) => {
+app.get("/api/availability", asyncHandler(async (req, res) => {
   const { date, service } = req.query;
   if (!date) return res.status(400).json({ error: "Falta la fecha" });
-  const slots = generateSlots(date, service);
+  const slots = await generateSlots(date, service);
   res.json({ date, slots });
-});
+}));
 
-app.post("/api/appointments", bookingRateLimit, (req, res) => {
+app.post("/api/appointments", bookingRateLimit, asyncHandler(async (req, res) => {
   const { name, phone, date, time, serviceId, addons } = req.body || {};
   if (!name || !phone || !date || !time || !serviceId) {
     return res.status(400).json({ error: "Faltan datos para reservar la cita" });
@@ -268,7 +266,7 @@ app.post("/api/appointments", bookingRateLimit, (req, res) => {
   }
 
   const weekday = getWeekday(date);
-  const db = readDB();
+  const db = await readDB();
   const esJuevesConMetodoIskali = weekday === 4 && isMetodoIskaliActivo(db);
 
   let finalServiceId, serviceName, duration, finalAddons, basePrice, price;
@@ -293,7 +291,7 @@ app.post("/api/appointments", bookingRateLimit, (req, res) => {
     price = addReservationFee(basePrice);
   }
 
-  const availableTimes = generateSlots(date, finalServiceId).map((s) => s.time);
+  const availableTimes = (await generateSlots(date, finalServiceId)).map((s) => s.time);
   if (!availableTimes.includes(time)) {
     return res.status(409).json({ error: "Ese horario ya no está disponible, elige otro" });
   }
@@ -316,7 +314,7 @@ app.post("/api/appointments", bookingRateLimit, (req, res) => {
     createdAt: new Date().toISOString(),
   };
   db.appointments.push(appt);
-  writeDB(db);
+  await writeDB(db);
 
   const priceText = price != null ? ` Total: $${price} (incluye $${config.booking.reservationFee} de cuota por agendar).` : "";
   const waText =
@@ -330,36 +328,36 @@ app.post("/api/appointments", bookingRateLimit, (req, res) => {
     whatsappLink,
     afterBookingMessage: config.messages.afterBooking,
   });
-});
+}));
 
-// ---------- API del panel: ajustes generales (solo admin) ----------
+// ---------- API del panel: ajustes generales ----------
 
-app.get("/api/admin/settings", requireAuth, (req, res) => {
-  const db = readDB();
+app.get("/api/admin/settings", requireAuth, asyncHandler(async (req, res) => {
+  const db = await readDB();
   res.json({ settings: db.settings });
-});
+}));
 
-app.put("/api/admin/settings", requireAuth, requireAdmin, (req, res) => {
+app.put("/api/admin/settings", requireAuth, requireAdmin, asyncHandler(async (req, res) => {
   const { metodoIskaliActivo } = req.body || {};
   if (typeof metodoIskaliActivo !== "boolean") {
     return res.status(400).json({ error: "Falta metodoIskaliActivo (true/false)" });
   }
-  const db = readDB();
+  const db = await readDB();
   db.settings.metodoIskaliActivo = metodoIskaliActivo;
-  writeDB(db);
+  await writeDB(db);
   res.json({ ok: true, settings: db.settings });
-});
+}));
 
 // ---------- API del panel: citas ----------
 
-app.get("/api/admin/appointments", requireAuth, (req, res) => {
-  const db = readDB();
+app.get("/api/admin/appointments", requireAuth, asyncHandler(async (req, res) => {
+  const db = await readDB();
   const sorted = [...db.appointments].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
   res.json({ appointments: sorted });
-});
+}));
 
-app.put("/api/admin/appointments/:id", requireAuth, requireAdmin, (req, res) => {
-  const db = readDB();
+app.put("/api/admin/appointments/:id", requireAuth, requireAdmin, asyncHandler(async (req, res) => {
+  const db = await readDB();
   const idx = db.appointments.findIndex((a) => a.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: "No encontrada" });
 
@@ -426,47 +424,47 @@ app.put("/api/admin/appointments/:id", requireAuth, requireAdmin, (req, res) => 
   }
 
   db.appointments[idx] = updated;
-  writeDB(db);
+  await writeDB(db);
   res.json({ ok: true, appointment: updated });
-});
+}));
 
-app.delete("/api/admin/appointments/:id", requireAuth, requireAdmin, (req, res) => {
-  const db = readDB();
+app.delete("/api/admin/appointments/:id", requireAuth, requireAdmin, asyncHandler(async (req, res) => {
+  const db = await readDB();
   const before = db.appointments.length;
   db.appointments = db.appointments.filter((a) => a.id !== req.params.id);
   if (db.appointments.length === before) return res.status(404).json({ error: "No encontrada" });
-  writeDB(db);
+  await writeDB(db);
   res.json({ ok: true });
-});
+}));
 
 // ---------- API del panel: días bloqueados ----------
 
-app.get("/api/admin/blocked-dates", requireAuth, requireAdmin, (req, res) => {
-  const db = readDB();
+app.get("/api/admin/blocked-dates", requireAuth, requireAdmin, asyncHandler(async (req, res) => {
+  const db = await readDB();
   res.json({ blockedDates: (db.blockedDates || []).sort() });
-});
+}));
 
-app.post("/api/admin/blocked-dates", requireAuth, requireAdmin, (req, res) => {
+app.post("/api/admin/blocked-dates", requireAuth, requireAdmin, asyncHandler(async (req, res) => {
   const { date } = req.body || {};
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: "Fecha inválida" });
-  const db = readDB();
+  const db = await readDB();
   if (!db.blockedDates) db.blockedDates = [];
   if (!db.blockedDates.includes(date)) db.blockedDates.push(date);
-  writeDB(db);
+  await writeDB(db);
   res.json({ ok: true, blockedDates: db.blockedDates.sort() });
-});
+}));
 
-app.delete("/api/admin/blocked-dates/:date", requireAuth, requireAdmin, (req, res) => {
-  const db = readDB();
+app.delete("/api/admin/blocked-dates/:date", requireAuth, requireAdmin, asyncHandler(async (req, res) => {
+  const db = await readDB();
   db.blockedDates = (db.blockedDates || []).filter((d) => d !== req.params.date);
-  writeDB(db);
+  await writeDB(db);
   res.json({ ok: true, blockedDates: db.blockedDates.sort() });
-});
+}));
 
 // ---------- API del panel: clientes y estadísticas ----------
 
-app.get("/api/admin/clients", requireAuth, requireAdmin, (req, res) => {
-  const db = readDB();
+app.get("/api/admin/clients", requireAuth, requireAdmin, asyncHandler(async (req, res) => {
+  const db = await readDB();
   const byPhone = new Map();
   for (const a of db.appointments) {
     if (a.status === "cancelada") continue;
@@ -478,18 +476,18 @@ app.get("/api/admin/clients", requireAuth, requireAdmin, (req, res) => {
   }
   const clients = [...byPhone.values()].sort((x, y) => y.visits - x.visits);
   res.json({ clients });
-});
+}));
 
-app.get("/api/admin/clients/:phone", requireAuth, requireAdmin, (req, res) => {
-  const db = readDB();
+app.get("/api/admin/clients/:phone", requireAuth, requireAdmin, asyncHandler(async (req, res) => {
+  const db = await readDB();
   const history = db.appointments
     .filter((a) => a.phone === req.params.phone)
     .sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
   res.json({ phone: req.params.phone, history });
-});
+}));
 
-app.get("/api/admin/stats", requireAuth, requireAdmin, (req, res) => {
-  const db = readDB();
+app.get("/api/admin/stats", requireAuth, requireAdmin, asyncHandler(async (req, res) => {
+  const db = await readDB();
   const active = db.appointments.filter((a) => a.status !== "cancelada");
 
   const weekdayCounts = [0, 0, 0, 0, 0, 0, 0];
@@ -519,7 +517,7 @@ app.get("/api/admin/stats", requireAuth, requireAdmin, (req, res) => {
     busiestWeekday: active.length ? weekdayNames[busiestIdx] : null,
     topService,
   });
-});
+}));
 
 // ---------- Archivos estáticos ----------
 
