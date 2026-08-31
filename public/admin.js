@@ -142,12 +142,61 @@ if (listEl) {
     return a.name.toLowerCase().includes(state.searchTerm) || a.phone.toLowerCase().includes(state.searchTerm);
   }
 
+  // ---- Agrupación de citas por periodo (Hoy / Esta semana / Este mes / Próximos meses / Meses anteriores) ----
+
+  // Convierte "YYYY-MM-DD" a Date local a medianoche, sin desfase de zona horaria.
+  function parseLocalDate(dateStr) {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  const GROUP_ORDER = ["hoy", "semana", "mes", "proximos", "anteriores"];
+  const GROUP_TITLES = {
+    hoy: "Hoy",
+    semana: "Esta semana",
+    mes: "Este mes",
+    proximos: "Próximos meses",
+    anteriores: "Meses anteriores",
+  };
+
+  function getGroupKey(dateStr, today, startOfWeek, endOfWeek, startOfMonth, endOfMonth) {
+    const d = parseLocalDate(dateStr);
+    if (d.getTime() === today.getTime()) return "hoy";
+    if (d >= startOfWeek && d <= endOfWeek) return "semana";
+    if (d >= startOfMonth && d <= endOfMonth) return "mes";
+    if (d > endOfMonth) return "proximos";
+    return "anteriores";
+  }
+
+  function groupAppointments(items) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // Semana Domingo→Sábado, igual que el calendario del panel.
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay());
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+    const groups = { hoy: [], semana: [], mes: [], proximos: [], anteriores: [] };
+    items.forEach((a) => {
+      const key = getGroupKey(a.date, today, startOfWeek, endOfWeek, startOfMonth, endOfMonth);
+      groups[key].push(a);
+    });
+    return groups;
+  }
+
   function renderList() {
     listEl.innerHTML = "";
     let items = state.appointments.filter(matchesSearch);
-    if (state.dayFilter) items = items.filter((a) => a.date === state.dayFilter);
 
+    // Si viene de un clic en el calendario (día específico), se mantiene la
+    // vista plana de siempre — no tiene sentido agrupar un solo día.
     if (state.dayFilter) {
+      items = items.filter((a) => a.date === state.dayFilter);
       const banner = document.createElement("p");
       banner.className = "note";
       banner.innerHTML = `Mostrando citas del <strong>${escapeHtml(state.dayFilter)}</strong> — <a href="#" id="clearDayFilter" style="color:var(--yellow);">ver todas</a>`;
@@ -157,6 +206,16 @@ if (listEl) {
         state.dayFilter = null;
         renderList();
       });
+
+      if (items.length === 0) {
+        const p = document.createElement("p");
+        p.className = "note";
+        p.textContent = "No hay citas que coincidan.";
+        listEl.appendChild(p);
+        return;
+      }
+      items.forEach((a) => listEl.appendChild(appointmentCard(a)));
+      return;
     }
 
     if (items.length === 0) {
@@ -166,7 +225,19 @@ if (listEl) {
       listEl.appendChild(p);
       return;
     }
-    items.forEach((a) => listEl.appendChild(appointmentCard(a)));
+
+    const groups = groupAppointments(items);
+    GROUP_ORDER.forEach((key) => {
+      const groupItems = groups[key];
+      if (groupItems.length === 0) return;
+
+      const header = document.createElement("div");
+      header.className = "list-section-header";
+      header.innerHTML = `<span>${GROUP_TITLES[key]}</span><span class="list-section-count">${groupItems.length}</span>`;
+      listEl.appendChild(header);
+
+      groupItems.forEach((a) => listEl.appendChild(appointmentCard(a)));
+    });
   }
 
   function appointmentCard(a) {

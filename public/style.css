@@ -131,6 +131,18 @@ footer .muted { opacity: .7; }
 .client-row:hover { outline: 1px solid var(--yellow); }
 .client-row .visits { color: var(--yellow); font-weight: 600; font-size: .85rem; }
 
+/* ---------- Encabezados de grupo en la lista de citas (Hoy / Esta semana / etc.) ---------- */
+.list-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--ink-soft-2);
+  font-family: 'Fraunces', serif; font-weight: 600; color: var(--yellow); font-size: 1.05rem;
+}
+.list-section-header:first-child { margin-top: 4px; }
+.list-section-count {
+  font-family: 'Inter', sans-serif; font-weight: 600; font-size: .75rem; color: var(--ink);
+  background: var(--yellow); border-radius: 20px; padding: 2px 9px;
+}
+
 /* ---------- Interruptor de Método Iskali (panel de admin) ---------- */
 .iskali-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .iskali-toggle-status { font-family: 'Fraunces', serif; font-weight: 600; font-size: 1.1rem; margin: 0 0 4px; color: var(--yellow); }
