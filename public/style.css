@@ -566,3 +566,7 @@ body::after { z-index: 30; opacity: .055; }
 .service-card.selected, .session-card.selected, .addon-pill.selected { color: var(--bone); background: linear-gradient(105deg, rgba(0,0,0,.9), rgba(17,17,17,.82) 48%, rgba(34,34,34,.72)); border-color: rgba(255,255,255,.65); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 0 20px rgba(255,255,255,.08); }
 .service-card.selected .service-meta { color: var(--bone); border-color: rgba(246,201,69,.45); background: rgba(246,201,69,.09); }
 @media (max-width: 780px) { .side-rail { width: 10px; } .hero { padding-left: 35px; padding-right: 35px; text-align: center; } .hero .info-strip { justify-content: center; } }
+
+
+/* Las barras laterales se retiran para mantener la composición limpia. */
+.side-rail { display: none !important; }
