@@ -528,3 +528,27 @@ body::after { z-index: 30; opacity: .055; }
 .service-card:hover, .slot-btn:hover, .addon-pill:hover { border-color: rgba(235,235,235,.9); box-shadow: 0 0 18px rgba(200,210,230,.18); }
 .service-card.selected, .slot-btn.selected, .addon-pill.selected { color: #111; background: linear-gradient(180deg, #fff 0%, #e7e7e7 48%, #cfcfcf 100%); border-color: #fff; }
 #dateSection, #contactSection, #confirmSection { backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+
+
+/* Selección inequívoca: hover no simula selección; solo .selected cambia de color. */
+.service-card:not(.selected):hover,
+.service-card:not(.selected):focus-visible,
+.session-card:not(.selected):hover,
+.session-card:not(.selected):focus-visible,
+.addon-pill:not(.selected):hover,
+.addon-pill:not(.selected):focus-visible {
+  color: var(--bone);
+  background: linear-gradient(105deg, rgba(5,5,5,.82), rgba(42,42,42,.76) 48%, rgba(74,74,74,.58));
+  border-color: rgba(198,198,198,.35);
+  box-shadow: none;
+  outline: none;
+}
+.service-card.selected,
+.session-card.selected,
+.addon-pill.selected {
+  color: #111;
+  background: linear-gradient(180deg, #fff 0%, #e7e7e7 48%, #cfcfcf 100%);
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.18), 0 0 26px rgba(255,255,255,.16);
+}
+.service-card.selected .service-meta { color: #111; border-color: rgba(17,17,17,.35); background: rgba(255,255,255,.35); }
