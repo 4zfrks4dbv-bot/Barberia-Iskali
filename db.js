@@ -20,10 +20,18 @@ const DEFAULT_DB = {
   settings: { metodoIskaliActivo: true },
 };
 
+// En localhost se usa memoria si no existe DATABASE_URL. En Render/producción
+// se mantiene PostgreSQL como almacenamiento persistente.
+const useLocalMemory = !process.env.DATABASE_URL;
+let localData = JSON.parse(JSON.stringify(DEFAULT_DB));
+
+function cloneData(data) {
+  return JSON.parse(JSON.stringify(data));
+}
+
 if (!process.env.DATABASE_URL) {
   console.warn(
-    "⚠️  Falta DATABASE_URL en las variables de entorno. " +
-    "Agrega la Internal Database URL en Render (o la External URL en tu .env local)."
+    "⚠️  DATABASE_URL no está definida: localhost usará almacenamiento temporal en memoria."
   );
 }
 
@@ -39,6 +47,7 @@ const pool = new Pool({
 let initialized = false;
 
 async function ensureInit() {
+  if (useLocalMemory) return;
   if (initialized) return;
   await pool.query(`
     CREATE TABLE IF NOT EXISTS store (
@@ -54,6 +63,7 @@ async function ensureInit() {
 }
 
 async function readDB() {
+  if (useLocalMemory) return cloneData(localData);
   await ensureInit();
   const { rows } = await pool.query("SELECT data FROM store WHERE id = 1");
   const db = rows[0].data;
@@ -65,6 +75,10 @@ async function readDB() {
 }
 
 async function writeDB(data) {
+  if (useLocalMemory) {
+    localData = cloneData(data);
+    return;
+  }
   await ensureInit();
   await pool.query("UPDATE store SET data = $1 WHERE id = 1", [data]);
 }
