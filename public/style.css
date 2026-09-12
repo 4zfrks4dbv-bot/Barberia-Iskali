@@ -231,3 +231,19 @@ footer .muted { opacity: .7; }
 .list-section-chevron { min-width: 1.2em; font-size: 1.2rem; line-height: 1; }
 .appointment-group-body[hidden] { display: none; }
 .appointment-group-body { overflow: hidden; }
+
+
+.previous-month-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 8px 6px;
+  margin: 12px 0 6px;
+  color: var(--bone-dim);
+  font-size: .86rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: capitalize;
+  border-bottom: 1px solid var(--ink-soft-2);
+}
+.previous-month-header span:last-child { color: var(--yellow); font-size: .75rem; }

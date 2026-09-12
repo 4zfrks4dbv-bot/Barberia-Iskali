@@ -177,6 +177,22 @@ if (listEl) {
     return groups;
   }
 
+  function groupByMonth(items) {
+    const groups = new Map();
+    items.forEach((appointment) => {
+      const key = appointment.date.slice(0, 7);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(appointment);
+    });
+    return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  }
+
+  function monthLabel(monthKey) {
+    const [year, month] = monthKey.split("-").map(Number);
+    return new Intl.DateTimeFormat("es-MX", { month: "long", year: "numeric" })
+      .format(new Date(year, month - 1, 1));
+  }
+
   function renderList() {
     listEl.innerHTML = "";
     let items = state.appointments.filter(matchesSearch);
@@ -230,7 +246,17 @@ if (listEl) {
       const groupBody = document.createElement("div");
       groupBody.className = "appointment-group-body";
       groupBody.hidden = isCollapsed;
-      groupItems.forEach((a) => groupBody.appendChild(appointmentCard(a)));
+      if (key === "anteriores") {
+        groupByMonth(groupItems).forEach(([monthKey, monthItems]) => {
+          const monthHeader = document.createElement("div");
+          monthHeader.className = "previous-month-header";
+          monthHeader.innerHTML = `<span>${monthLabel(monthKey)}</span><span>${monthItems.length}</span>`;
+          groupBody.appendChild(monthHeader);
+          monthItems.forEach((a) => groupBody.appendChild(appointmentCard(a)));
+        });
+      } else {
+        groupItems.forEach((a) => groupBody.appendChild(appointmentCard(a)));
+      }
       listEl.appendChild(groupBody);
       header.addEventListener("click", () => {
         state.collapsedGroups[key] = !state.collapsedGroups[key];
