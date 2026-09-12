@@ -34,8 +34,9 @@ if (listEl) {
     calendarMonth: new Date(),
     dayFilter: null,
     searchTerm: "",
-    businessConfig: null,
-    metodoIskaliActivo: true,
+      businessConfig: null,
+      metodoIskaliActivo: true,
+      collapsedGroups: { hoy: true, proximos: true, anteriores: true },
   };
 
   if (guardPage(false)) {
@@ -142,7 +143,7 @@ if (listEl) {
     return a.name.toLowerCase().includes(state.searchTerm) || a.phone.toLowerCase().includes(state.searchTerm);
   }
 
-  // ---- Agrupación de citas por periodo (Hoy / Esta semana / Este mes / Próximos meses / Meses anteriores) ----
+  // ---- Agrupación simple y clara: Hoy / Próximos días / Anteriores ----
 
   // Convierte "YYYY-MM-DD" a Date local a medianoche, sin desfase de zona horaria.
   function parseLocalDate(dateStr) {
@@ -150,21 +151,17 @@ if (listEl) {
     return new Date(y, m - 1, d);
   }
 
-  const GROUP_ORDER = ["hoy", "semana", "mes", "proximos", "anteriores"];
+  const GROUP_ORDER = ["hoy", "proximos", "anteriores"];
   const GROUP_TITLES = {
     hoy: "Hoy",
-    semana: "Esta semana",
-    mes: "Este mes",
-    proximos: "Próximos meses",
-    anteriores: "Meses anteriores",
+    proximos: "Próximos días",
+    anteriores: "Cortes anteriores",
   };
 
-  function getGroupKey(dateStr, today, startOfWeek, endOfWeek, startOfMonth, endOfMonth) {
+  function getGroupKey(dateStr, today) {
     const d = parseLocalDate(dateStr);
     if (d.getTime() === today.getTime()) return "hoy";
-    if (d >= startOfWeek && d <= endOfWeek) return "semana";
-    if (d >= startOfMonth && d <= endOfMonth) return "mes";
-    if (d > endOfMonth) return "proximos";
+    if (d > today) return "proximos";
     return "anteriores";
   }
 
@@ -172,18 +169,9 @@ if (listEl) {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // Semana Domingo→Sábado, igual que el calendario del panel.
-    const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay());
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-
-    const groups = { hoy: [], semana: [], mes: [], proximos: [], anteriores: [] };
+    const groups = { hoy: [], proximos: [], anteriores: [] };
     items.forEach((a) => {
-      const key = getGroupKey(a.date, today, startOfWeek, endOfWeek, startOfMonth, endOfMonth);
+      const key = getGroupKey(a.date, today);
       groups[key].push(a);
     });
     return groups;
@@ -231,12 +219,23 @@ if (listEl) {
       const groupItems = groups[key];
       if (groupItems.length === 0) return;
 
-      const header = document.createElement("div");
+      const header = document.createElement("button");
       header.className = "list-section-header";
-      header.innerHTML = `<span>${GROUP_TITLES[key]}</span><span class="list-section-count">${groupItems.length}</span>`;
+      const isCollapsed = state.collapsedGroups[key];
+      header.type = "button";
+      header.setAttribute("aria-expanded", String(!isCollapsed));
+      header.innerHTML = `<span>${GROUP_TITLES[key]}</span><span class="list-section-meta"><span class="list-section-count">${groupItems.length}</span><span class="list-section-chevron">${isCollapsed ? "＋" : "−"}</span></span>`;
       listEl.appendChild(header);
 
-      groupItems.forEach((a) => listEl.appendChild(appointmentCard(a)));
+      const groupBody = document.createElement("div");
+      groupBody.className = "appointment-group-body";
+      groupBody.hidden = isCollapsed;
+      groupItems.forEach((a) => groupBody.appendChild(appointmentCard(a)));
+      listEl.appendChild(groupBody);
+      header.addEventListener("click", () => {
+        state.collapsedGroups[key] = !state.collapsedGroups[key];
+        renderList();
+      });
     });
   }
 

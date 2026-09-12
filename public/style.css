@@ -206,3 +206,28 @@ footer .muted { opacity: .7; }
   .hero { padding: 28px 16px 22px; }
   .card { padding: 18px; }
 }
+
+
+/* Citas agrupadas y colapsables: Hoy / Próximos días / Cortes anteriores. */
+.list-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin: 18px 0 8px;
+  padding: 14px 16px;
+  color: var(--yellow);
+  font: 600 1.05rem 'Fraunces', serif;
+  text-align: left;
+  background: var(--ink-soft);
+  border: 1px solid var(--ink-soft-2);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.list-section-header:hover,
+.list-section-header:focus-visible { color: var(--ink); background: var(--yellow); border-color: var(--yellow); outline: none; }
+.list-section-meta { display: inline-flex; align-items: center; gap: 10px; font-family: 'Inter', sans-serif; }
+.list-section-count { padding: 2px 9px; color: var(--ink); font-size: .75rem; background: var(--yellow); border-radius: 20px; }
+.list-section-chevron { min-width: 1.2em; font-size: 1.2rem; line-height: 1; }
+.appointment-group-body[hidden] { display: none; }
+.appointment-group-body { overflow: hidden; }
