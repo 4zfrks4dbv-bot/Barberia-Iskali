@@ -37,11 +37,11 @@ if (!process.env.DATABASE_URL) {
 
 // Detecta si es la URL externa (tiene dominio .render.com => necesita SSL)
 // o la interna (solo el hostname corto tipo dpg-xxxx-a => sin SSL, misma red).
-const isExternalUrl = /\.render\.com/.test(process.env.DATABASE_URL || "");
+const isLocalUrl = /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL || "");
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: isExternalUrl ? { rejectUnauthorized: false } : false,
+  ssl: isLocalUrl ? false : { rejectUnauthorized: false },
 });
 
 let initialized = false;
